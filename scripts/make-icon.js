@@ -19,56 +19,76 @@ const FONT = path.join(
   'node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2',
 );
 
-// Выполняется внутри страницы: строчная q из шрифта интерфейса, с его настоящими пропорциями.
-async function drawIcon(canvasSize, fontUrl, share) {
-  const font = new FontFace('Inter', `url(${fontUrl})`, { weight: '100 900' });
-  document.fonts.add(await font.load());
+// Знак Quad: четыре дуги с открытыми углами, как четыре струны заставки.
+// Через свободный угол проходит хвостик, и круг становится буквой Q.
+// Выполняется внутри страницы, поэтому всё нужное лежит внутри функции.
+function drawMark(ctx, size, centerX, centerY) {
+  const small = size <= 48;
+  const radius = size * 0.285;
+  const halfGap = small ? 0.2 : 0.27;
 
+  // Угол с хвостиком чуть шире остальных, иначе дуги упираются в него.
+  const tailRoom = small ? 0.06 : 0.1;
+  const paint = ctx.createLinearGradient(0, centerY - radius, 0, centerY + radius * 1.5);
+  paint.addColorStop(0, '#ffffff');
+  paint.addColorStop(1, '#a9a9b4');
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineWidth = size * (small ? 0.105 : 0.06);
+  ctx.strokeStyle = paint;
+  if (size >= 64) {
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+    ctx.shadowBlur = size * 0.05;
+  }
+
+  for (let quarter = 0; quarter < 4; quarter += 1) {
+    const corner = Math.PI / 4 + (quarter * Math.PI) / 2;
+    ctx.beginPath();
+    const from = corner + halfGap + (quarter === 0 ? tailRoom : 0);
+    const to = corner + Math.PI / 2 - halfGap - (quarter === 3 ? tailRoom : 0);
+    ctx.arc(centerX, centerY, radius, from, to);
+    ctx.stroke();
+  }
+
+  const diagonal = Math.SQRT1_2;
+  ctx.beginPath();
+  ctx.moveTo(centerX + radius * 0.5 * diagonal, centerY + radius * 0.5 * diagonal);
+  ctx.lineTo(centerX + radius * 1.5 * diagonal, centerY + radius * 1.5 * diagonal);
+  ctx.stroke();
+  ctx.restore();
+}
+
+async function drawIcon(canvasSize, share, mark) {
   const canvas = document.createElement('canvas');
   canvas.width = canvasSize;
   canvas.height = canvasSize;
   const ctx = canvas.getContext('2d');
 
   const size = canvasSize * share;
-  ctx.translate((canvasSize - size) / 2, (canvasSize - size) / 2);
+  const offset = (canvasSize - size) / 2;
+  ctx.translate(offset, offset);
 
   ctx.beginPath();
   ctx.roundRect(0, 0, size, size, size * 0.23);
   const background = ctx.createLinearGradient(0, 0, 0, size);
-  background.addColorStop(0, '#1e1e1e');
-  background.addColorStop(1, '#000000');
+  background.addColorStop(0, '#222226');
+  background.addColorStop(1, '#050506');
   ctx.fillStyle = background;
   ctx.fill();
 
-  // На мелких размерах тонкая буква рассыпается, поэтому она жирнее.
-  const weight = size <= 32 ? 600 : 400;
-  ctx.font = `${weight} ${size * 0.86}px Inter`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
+  const glow = ctx.createRadialGradient(size * 0.5, size * 0.42, 0, size * 0.5, size * 0.42, size * 0.6);
+  glow.addColorStop(0, 'rgba(255, 255, 255, 0.09)');
+  glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.fill();
 
-  // Центрируется по видимым границам буквы, а не по метрикам шрифта.
-  const box = ctx.measureText('q');
-  const width = box.actualBoundingBoxLeft + box.actualBoundingBoxRight;
-  const height = box.actualBoundingBoxAscent + box.actualBoundingBoxDescent;
-  const x = (size - width) / 2 + box.actualBoundingBoxLeft;
-  const y = (size - height) / 2 + box.actualBoundingBoxAscent;
-
-  const metal = ctx.createLinearGradient(0, size * 0.2, 0, size * 0.85);
-  metal.addColorStop(0, '#ffffff');
-  metal.addColorStop(1, '#bdbdbd');
-  ctx.fillStyle = metal;
-
-  if (size >= 64) {
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.35)';
-    ctx.shadowBlur = size * 0.05;
-  }
-  ctx.fillText('q', x, y);
-
+  mark(ctx, size, size * 0.485, size * 0.485);
   return canvas.toDataURL('image/png');
 }
 
 // Картинка установщика: чёрный фон, надпись и четыре линии с открытыми углами, как в заставке.
-async function drawBanner(width, height, fontUrl) {
+async function drawBanner(width, height, fontUrl, mark) {
   const font = new FontFace('Inter', `url(${fontUrl})`, { weight: '100 900' });
   document.fonts.add(await font.load());
 
@@ -79,37 +99,18 @@ async function drawBanner(width, height, fontUrl) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, width, height);
 
-  const size = Math.min(width, height) * 0.62;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  ctx.translate(centerX, centerY);
-
-  if (height > 100) {
-    ctx.save();
-    ctx.rotate(0.3);
-    ctx.lineWidth = 1;
-    for (let side = 0; side < 4; side += 1) {
-      const length = size * 0.37;
-      const gradient = ctx.createLinearGradient(-length, 0, length, 0);
-      gradient.addColorStop(0, 'rgba(255,255,255,0)');
-      gradient.addColorStop(0.18, 'rgba(255,255,255,0.8)');
-      gradient.addColorStop(0.82, 'rgba(255,255,255,0.8)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.strokeStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(-length, -size / 2);
-      ctx.lineTo(length, -size / 2);
-      ctx.stroke();
-      ctx.rotate(Math.PI / 2);
-    }
-    ctx.restore();
-  }
-
   ctx.fillStyle = '#fff';
-  ctx.font = `300 ${height > 100 ? size * 0.3 : height * 0.42}px Inter`;
-  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('quad', 0, 0);
+
+  // Сбоку установщика знак и название, в узкой шапке только знак.
+  if (height > 100) {
+    mark(ctx, width * 0.9, width / 2, height * 0.42);
+    ctx.font = `300 ${width * 0.17}px Inter`;
+    ctx.textAlign = 'center';
+    ctx.fillText('quad', width / 2, height * 0.66);
+  } else {
+    mark(ctx, height * 0.95, width - height * 0.55, height / 2);
+  }
 
   return [...ctx.getImageData(0, 0, width, height).data];
 }
@@ -181,12 +182,12 @@ app.whenReady().then(async () => {
 
   const fontUrl = `data:font/woff2;base64,${fs.readFileSync(FONT).toString('base64')}`;
   const draw = async (size, share) => {
-    const code = `(${drawIcon.toString()})(${size}, ${JSON.stringify(fontUrl)}, ${share})`;
+    const code = `(${drawIcon.toString()})(${size}, ${share}, ${drawMark.toString()})`;
     const url = await win.webContents.executeJavaScript(code);
     return Buffer.from(url.split(',')[1], 'base64');
   };
   const banner = async ([width, height]) => {
-    const code = `(${drawBanner.toString()})(${width}, ${height}, ${JSON.stringify(fontUrl)})`;
+    const code = `(${drawBanner.toString()})(${width}, ${height}, ${JSON.stringify(fontUrl)}, ${drawMark.toString()})`;
     return buildBmp(width, height, await win.webContents.executeJavaScript(code));
   };
 

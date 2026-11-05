@@ -14,7 +14,12 @@ contextBridge.exposeInMainWorld('music', {
   likedKeys: () => ipcRenderer.invoke('music:liked-keys'),
   setLiked: (id, trackId, liked) => ipcRenderer.invoke('music:set-liked', id, trackId, liked),
   waveNext: (options) => ipcRenderer.invoke('wave:next', options),
-  waveEvent: (track, type) => ipcRenderer.invoke('wave:event', track, type),
+  waveEvent: (track, type, heard) => ipcRenderer.invoke('wave:event', track, type, heard),
+  waveSimilar: (track, count, exclude) => ipcRenderer.invoke('wave:similar', track, count, exclude),
+  waveGenres: () => ipcRenderer.invoke('wave:genres'),
+  waveDislike: (track) => ipcRenderer.invoke('wave:dislike', track),
+  waveUndislike: (key) => ipcRenderer.invoke('wave:undislike', key),
+  waveDislikes: () => ipcRenderer.invoke('wave:dislikes'),
   downloadFolder: () => ipcRenderer.invoke('downloads:folder'),
   chooseDownloadFolder: () => ipcRenderer.invoke('downloads:choose'),
   openDownloadFolder: () => ipcRenderer.invoke('downloads:open'),
@@ -25,6 +30,16 @@ contextBridge.exposeInMainWorld('music', {
   removePlaylist: (id) => ipcRenderer.invoke('playlists:remove', id),
   togglePlaylistTrack: (id, track) => ipcRenderer.invoke('playlists:toggle', id, track),
   collection: (id, collectionId, offset) => ipcRenderer.invoke('music:collection', id, collectionId, offset),
+});
+
+contextBridge.exposeInMainWorld('quadUpdate', {
+  version: ipcRenderer.sendSync('app:version'),
+  check: () => ipcRenderer.invoke('update:check'),
+  install: () => ipcRenderer.invoke('update:install'),
+  openPage: () => ipcRenderer.send('update:open-page'),
+  onProgress: (callback) => {
+    ipcRenderer.on('update:progress', (_event, share) => callback(share));
+  },
 });
 
 contextBridge.exposeInMainWorld('windowControls', {

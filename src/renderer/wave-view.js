@@ -32,6 +32,7 @@
   const cover = document.getElementById('wave-cover');
   const title = document.getElementById('wave-title');
   const artists = document.getElementById('wave-artists');
+  const why = document.getElementById('wave-why');
   const startButton = document.getElementById('wave-start');
   const navItem = document.querySelector('[data-view="wave"]');
   const scene = new StringsScene(document.getElementById('wave-canvas'));
@@ -153,6 +154,7 @@
     else cover.removeAttribute('src');
     title.textContent = track.title;
     quadPlayer.renderArtistLinks(artists, track);
+    why.textContent = track.why ?? '';
     if (running) scene.pluckAll(9);
   }
 

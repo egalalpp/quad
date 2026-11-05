@@ -3,6 +3,7 @@ const path = require('node:path');
 const downloads = require('./downloads');
 const lyrics = require('./lyrics');
 const playlists = require('./playlists');
+const updater = require('./updater');
 const yandex = require('./providers/yandex');
 const wave = require('./wave/service');
 
@@ -180,7 +181,23 @@ ipcMain.handle('music:set-liked', async (_event, id, trackId, liked) => {
 });
 
 ipcMain.handle('wave:next', async (_event, options) => wave.next(await connectedProviders(), options));
-ipcMain.handle('wave:event', (_event, track, type) => wave.recordEvent(track, type));
+ipcMain.handle('wave:event', (_event, track, type, heard) => wave.recordEvent(track, type, heard));
+ipcMain.handle('wave:similar', async (_event, track, count, exclude) => (
+  wave.similar(await connectedProviders(), track, count, exclude)
+));
+ipcMain.handle('wave:genres', async () => wave.topGenres(await connectedProviders()));
+ipcMain.handle('wave:dislike', (_event, track) => wave.dislike(track));
+ipcMain.handle('wave:undislike', (_event, key) => wave.undislike(key));
+ipcMain.handle('wave:dislikes', () => wave.dislikes());
+
+ipcMain.on('app:version', (event) => {
+  event.returnValue = app.getVersion();
+});
+ipcMain.handle('update:check', () => updater.check());
+ipcMain.handle('update:install', (event) => updater.install((share) => {
+  event.sender.send('update:progress', share);
+}));
+ipcMain.on('update:open-page', () => updater.openPage());
 
 ipcMain.handle('downloads:folder', () => downloads.folder());
 ipcMain.handle('downloads:choose', (event) => downloads.chooseFolder(senderWindow(event)));
@@ -198,13 +215,14 @@ ipcMain.handle('playlists:toggle', (_event, id, track) => playlists.toggleTrack(
 ipcMain.handle('music:artist', (_event, id, artistId) => providerById(id).artist(artistId));
 
 // Треки всех аккаунтов перемешиваются между собой, а не идут блоками по сервисам.
-ipcMain.handle('music:random', async (_event, count) => (
-  shuffled(await fromConnected((provider) => provider.randomTracks(count)))
-));
+ipcMain.handle('music:random', async (_event, count) => {
+  const skip = new Set(await wave.dislikedKeys());
+  return shuffled(await fromConnected((provider) => provider.randomTracks(count, skip)));
+});
 
 // То же, что выше, но уже сыгравшие в этом миксе треки не возвращаются.
 ipcMain.handle('music:mix', async (_event, count, played) => {
-  const skip = new Set(played);
+  const skip = new Set([...played, ...(await wave.dislikedKeys())]);
   return shuffled(await fromConnected((provider) => provider.randomTracks(count, skip)));
 });
 

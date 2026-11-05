@@ -9,6 +9,7 @@
   const AMBIENT_INSET = 32;
   const AMBIENT_BLUR = 10;
   const TOAST_MS = 1800;
+  const TOAST_ACTION_MS = 6000;
   const TALL_TIP_TARGET = 100;
 
   const audio = new Audio();
@@ -36,6 +37,8 @@
   const connectNote = document.getElementById('connect-note');
   const laterButton = document.getElementById('intro-later');
   const toast = document.getElementById('toast');
+  const toastText = document.getElementById('toast-text');
+  const toastAction = document.getElementById('toast-action');
   const tip = document.getElementById('tip');
 
   let accounts = [];
@@ -86,11 +89,22 @@
     return node;
   }
 
-  function showToast(text) {
-    toast.textContent = text;
+  function hideToast() {
+    toast.classList.remove('is-visible');
+  }
+
+  function showToast(text, action) {
+    toastText.textContent = text;
+    toastAction.hidden = !action;
+    toastAction.textContent = action?.label ?? '';
+    toastAction.onclick = action ? () => {
+      hideToast();
+      action.run();
+    } : null;
+
     toast.classList.add('is-visible');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('is-visible'), TOAST_MS);
+    toastTimer = setTimeout(hideToast, action ? TOAST_ACTION_MS : TOAST_MS);
   }
 
   // Свои подсказки вместо системных: те выбиваются из стиля и появляются с задержкой.
@@ -527,6 +541,16 @@
     playAt(index);
   }
 
+  // Новая очередь без перезапуска: то, что играет, продолжает играть.
+  function adoptQueue(tracks, index) {
+    queue = tracks;
+    queueIndex = index;
+    detour = null;
+    movedKeys = new Set();
+    renderQueue();
+    document.dispatchEvent(new CustomEvent('quad:track'));
+  }
+
   function playNext() {
     if (upNext.length > 0) {
       detour = upNext.shift();
@@ -607,6 +631,7 @@
   window.quadPlayer = {
     audio,
     addNext,
+    adoptQueue,
     albumLink,
     connectedAccount: () => accounts.find((account) => account.connected),
     createRow,
@@ -614,6 +639,7 @@
     currentStream: () => currentStream,
     hasAccount,
     markCurrentRow,
+    next: playNext,
     paintAmbient,
     play,
     plural,

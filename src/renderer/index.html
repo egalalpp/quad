@@ -38,12 +38,29 @@
       <img class="wave-cover" id="wave-cover" alt="">
       <p class="wave-title" id="wave-title"></p>
       <p class="wave-artists" id="wave-artists"></p>
+      <p class="wave-why" id="wave-why"></p>
     </div>
     <button class="home-action home-action-main wave-start" id="wave-start">Запустить волну</button>
     <div class="home-modes wave-modes" aria-label="Настроение волны">
       <button class="home-mode" data-wave-mode="familiar">Любимое</button>
       <button class="home-mode" data-wave-mode="mix">Микс</button>
       <button class="home-mode" data-wave-mode="discover">Новое</button>
+      <span class="wave-modes-gap"></span>
+      <button class="home-mode" id="wave-tune-toggle">Настроить</button>
+    </div>
+    <div class="wave-tune" id="wave-tune" hidden>
+      <div class="wave-tune-row">
+        <span class="wave-tune-label">Жанр</span>
+        <div class="wave-tune-chips" id="wave-genres"></div>
+      </div>
+      <div class="wave-tune-row">
+        <span class="wave-tune-label">Эпоха</span>
+        <div class="wave-tune-chips" id="wave-eras"></div>
+      </div>
+      <div class="wave-tune-row">
+        <span class="wave-tune-label">Старт</span>
+        <div class="wave-tune-chips"><button class="home-mode" id="wave-seed">От этого трека</button></div>
+      </div>
     </div>
   </section>
 
@@ -233,6 +250,19 @@
               </form>
               <div class="playlist-list" id="playlist-list"></div>
             </section>
+
+            <section>
+              <div class="setting-head"><h2 class="setting-title">Скрытые треки</h2></div>
+              <div class="playlist-list" id="hidden-list"></div>
+            </section>
+
+            <section>
+              <div class="setting-head"><h2 class="setting-title">О приложении</h2></div>
+              <div class="about-row">
+                <span class="muted" id="app-version"></span>
+                <button class="row-action" id="update-check">Проверить обновления</button>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -299,6 +329,9 @@
         <button class="icon" id="btn-next" aria-label="Следующий трек" disabled>
           <svg viewBox="0 0 16 16"><path d="M4 3.5v9L10.5 8zM12.5 3.5v9"/></svg>
         </button>
+        <button class="icon icon-dislike" id="btn-dislike" aria-label="Не нравится" data-tip="Не нравится" disabled>
+          <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M4.2 4.2l7.6 7.6"/></svg>
+        </button>
       </div>
 
       <div class="side">
@@ -335,6 +368,9 @@
           <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
         </button>
         <button class="track-action download-button" data-download aria-label="Сохранить в папку" hidden><svg class="download-icon" viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9"/></svg><svg class="download-check" viewBox="0 0 10 10"><path pathLength="1" d="M2 5.3 4.2 7.5 8 3"/></svg></button>
+        <button class="track-action" data-wave-seed aria-label="Волна по этому треку" data-tip="Волна по этому треку" hidden>
+          <svg viewBox="0 0 18 18"><path d="M2 9c1.7-5.5 3.3-5.5 5 0s3.3 5.5 5 0 2.4-4 4-2"/></svg>
+        </button>
       </div>
       <p class="page-artists" id="page-artists"></p>
       <dl class="page-details" id="page-details"></dl>
@@ -348,7 +384,27 @@
     </div>
   </section>
 
-  <p class="toast" id="toast" aria-live="polite"></p>
+  <div class="toast" id="toast" aria-live="polite">
+    <span class="toast-text" id="toast-text"></span>
+    <button class="toast-action" id="toast-action" hidden></button>
+  </div>
+
+  <section class="update" id="update" aria-label="Обновление" hidden>
+    <div class="update-card">
+      <span class="frame-line frame-top"></span>
+      <span class="frame-line frame-right"></span>
+      <span class="frame-line frame-bottom"></span>
+      <span class="frame-line frame-left"></span>
+      <p class="update-label">Вышла новая версия</p>
+      <h2 class="update-version" id="update-version"></h2>
+      <p class="update-notes" id="update-notes"></p>
+      <div class="update-progress" id="update-progress" hidden><span></span></div>
+      <div class="update-actions">
+        <button class="home-action home-action-main" id="update-now">Обновить</button>
+        <button class="home-action home-action-ghost" id="update-later">Позже</button>
+      </div>
+    </div>
+  </section>
   <p class="tip" id="tip" aria-hidden="true"></p>
 
   <div class="playlist-menu" id="playlist-menu" hidden>
@@ -427,5 +483,6 @@
   <script src="home.js"></script>
   <script src="track-page.js"></script>
   <script src="intro.js"></script>
+  <script src="update.js"></script>
 </body>
 </html>

@@ -845,14 +845,15 @@ body.page-open .line-handle {
   bottom: calc(var(--edge) + 16px);
   left: 50%;
   z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   max-width: 60vw;
   padding: 8px 16px;
-  overflow: hidden;
   border-radius: 18px;
   font-size: 13px;
   color: #fff;
   white-space: nowrap;
-  text-overflow: ellipsis;
   background: rgba(30, 30, 30, 0.9);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   opacity: 0;
@@ -864,6 +865,213 @@ body.page-open .line-handle {
 .toast.is-visible {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+.toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  flex: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+/* Невидимая кнопка не должна перехватывать клики по тому, что под ней. */
+.toast.is-visible .toast-action {
+  pointer-events: auto;
+}
+
+/* На экране волны над плеером стоят режимы, подпись не должна их закрывать. */
+.on-wave .toast {
+  bottom: calc(var(--edge) + 62px);
+}
+
+.toast-action[hidden] {
+  display: none;
+}
+
+/* Окно обновления */
+
+.update {
+  --page-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 320ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.update[hidden] {
+  display: none;
+}
+
+.update.is-visible {
+  opacity: 1;
+}
+
+.update-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(440px, calc(100vw - 48px));
+  padding: 38px 36px 32px;
+  text-align: center;
+  transform: translateY(16px) scale(0.96);
+  transition: transform 520ms var(--page-ease);
+}
+
+.is-visible .update-card {
+  transform: none;
+}
+
+.update-card .frame-line {
+  opacity: 1;
+}
+
+.update-label {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.update-version {
+  margin-top: 4px;
+  font-size: 46px;
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.update-notes {
+  max-height: 150px;
+  margin-top: 14px;
+  overflow-y: auto;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+  white-space: pre-line;
+}
+
+.update-notes[hidden] {
+  display: none;
+}
+
+.update-progress {
+  width: 100%;
+  height: 2px;
+  margin-top: 22px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+.update-progress[hidden] {
+  display: none;
+}
+
+.update-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.6);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 200ms linear;
+}
+
+.update-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.update-actions .home-action:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* Настройки волны */
+
+.wave-modes-gap {
+  width: 1px;
+  height: 14px;
+  align-self: center;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+.wave-tune {
+  position: absolute;
+  bottom: calc(var(--edge) + 54px);
+  left: 50%;
+  display: grid;
+  gap: 8px;
+  width: min(560px, calc(100vw - 48px));
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(14, 14, 14, 0.86);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+  transform: translateX(-50%);
+  animation: tune-in 320ms var(--ease);
+}
+
+.wave-tune[hidden] {
+  display: none;
+}
+
+@keyframes tune-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+
+.wave-tune-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wave-tune-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wave-tune-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wave-tune-chips .home-mode:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.wave-why {
+  max-width: 100%;
+  min-height: 18px;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.about-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
 }
 
 .tip {
@@ -934,10 +1142,33 @@ body.page-open .line-handle {
 }
 
 .controls {
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 14px;
+}
+
+/* Сбоку от кнопок и вне их потока: кнопка игры остаётся ровно по центру окна. */
+.icon-dislike {
+  position: absolute;
+  left: calc(100% + 18px);
+  color: var(--muted);
+}
+
+.icon-dislike:hover:enabled {
+  color: #ff8d8d;
+}
+
+.icon-dislike.is-popping svg {
+  animation: dislike-pop 460ms cubic-bezier(0.2, 1.6, 0.3, 1);
+}
+
+@keyframes dislike-pop {
+  from {
+    color: #ff8d8d;
+    transform: rotate(-90deg) scale(0.6);
+  }
 }
 
 .icon {

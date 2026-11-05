@@ -26,6 +26,7 @@
   const playlistForm = document.getElementById('playlist-form');
   const playlistInput = document.getElementById('playlist-input');
   const playlistList = document.getElementById('playlist-list');
+  const hiddenList = document.getElementById('hidden-list');
   const navItem = document.querySelector('[data-view="settings"]');
   const { audio } = quadPlayer;
 
@@ -258,6 +259,40 @@
     }));
   }
 
+  /* Скрытые треки */
+
+  async function renderHidden() {
+    const tracks = await music.waveDislikes();
+
+    if (tracks.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = 'Здесь будут треки, которым ты поставил «Не нравится»';
+      hiddenList.replaceChildren(empty);
+      return;
+    }
+
+    hiddenList.replaceChildren(...[...tracks].reverse().map((track) => {
+      const row = document.createElement('div');
+      row.className = 'playlist-row hidden-row';
+
+      const title = document.createElement('span');
+      title.className = 'playlist-open';
+      title.textContent = `${track.title} — ${track.label}`;
+
+      const restore = document.createElement('button');
+      restore.className = 'row-action';
+      restore.textContent = 'Вернуть';
+      restore.addEventListener('click', async () => {
+        await music.waveUndislike(track.key);
+        renderHidden();
+      });
+
+      row.append(title, restore);
+      return row;
+    }));
+  }
+
   playlistForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const title = playlistInput.value.trim();
@@ -271,8 +306,10 @@
   navItem.addEventListener('click', () => {
     renderDevices();
     renderPlaylists();
+    renderHidden();
   });
   document.addEventListener('quad:library-changed', renderPlaylists);
+  document.addEventListener('quad:dislikes-changed', renderHidden);
 
   // Подписка держит отдельный системный процесс, поэтому только когда список устройств открывали.
   navItem.addEventListener('click', () => {

@@ -3,9 +3,11 @@ const { test } = require('node:test');
 const {
   MODES,
   buildProfile,
+  dislikesOf,
   historyOf,
   pickBatch,
   scoreTrack,
+  sessionOf,
 } = require('../src/wave/algorithm');
 
 const NOW = Date.UTC(2026, 10, 4);
@@ -108,4 +110,110 @@ test('любимый артист обгоняет нелюбимого', () => 
   const profile = buildProfile([], [event(loved, 'like'), event(hated, 'skip'), event(hated, 'skip')], NOW);
   const [first] = pickBatch([hated, loved], profile, context(), 1);
   assert.equal(first.id, '1');
+});
+
+test('дизлайк навсегда убирает трек из волны', () => {
+  const item = track(1, 'a');
+  const dislikes = dislikesOf([{ key: 'y:1', artists: ['y:a'], at: NOW - 400 * DAY }]);
+  const profile = buildProfile([], [], NOW);
+  assert.equal(scoreTrack(item, profile, context({ dislikes })), null);
+});
+
+test('дизлайк опускает артиста, а после трёх он не ставится совсем', () => {
+  const list = [1, 2].map((id) => ({ key: `y:${id}`, artists: ['y:a'], genre: 'rap', at: NOW }));
+  const profile = buildProfile([], [], NOW, list);
+  assert.ok(profile.artists.get('y:a') < 0);
+  assert.ok(profile.genres.get('rap') < 0);
+
+  const other = track(9, 'a');
+  const empty = buildProfile([], [], NOW);
+  const two = scoreTrack(other, empty, context({ dislikes: dislikesOf(list) }));
+  assert.ok(two < scoreTrack(other, empty, context()));
+
+  const three = dislikesOf([...list, { key: 'y:3', artists: ['y:a'], at: NOW }]);
+  assert.equal(scoreTrack(other, empty, context({ dislikes: three })), null);
+});
+
+test('пропуск на первых секундах весит больше позднего', () => {
+  const early = track(1, 'a');
+  const late = track(2, 'b');
+  const { artists } = buildProfile([], [
+    { ...event(early, 'skip'), heard: 0.02 },
+    { ...event(late, 'skip'), heard: 0.38 },
+  ], NOW);
+  assert.ok(artists.get('y:a') < artists.get('y:b'));
+});
+
+test('слушанное в это же время суток весит больше', () => {
+  const same = track(1, 'a');
+  const opposite = track(2, 'b');
+  const { artists } = buildProfile([], [event(same, 'finish', DAY), event(opposite, 'finish', DAY + 12 * HOUR)], NOW);
+  assert.ok(artists.get('y:a') > artists.get('y:b') * 1.2);
+});
+
+test('серия пропусков толкает волну к новому', () => {
+  const liked = track(1, 'a');
+  const unknown = track(2, 'b');
+  const likedKeys = new Set(['y:1']);
+  const profile = buildProfile([], [], NOW);
+  const skips = [track(5, 'x'), track(6, 'y'), track(7, 'z')].map((item) => event(item, 'skip', 60000));
+
+  const calm = sessionOf([], NOW);
+  const tired = sessionOf(skips, NOW);
+  assert.equal(tired.streak, 3);
+
+  const gap = (session) => scoreTrack(unknown, profile, context({ mode: MODES.familiar, likedKeys, session }))
+    - scoreTrack(liked, profile, context({ mode: MODES.familiar, likedKeys, session }));
+  assert.ok(gap(tired) > gap(calm));
+});
+
+test('жанр из пропущенных сейчас опускается, из дослушанных поднимается', () => {
+  const session = sessionOf([event(track(1, 'a', 'rock'), 'skip', 60000), event(track(2, 'b', 'pop'), 'finish', 30000)], NOW);
+  const profile = buildProfile([], [], NOW);
+  const rock = scoreTrack(track(3, 'c', 'rock'), profile, context({ session }));
+  const pop = scoreTrack(track(4, 'd', 'pop'), profile, context({ session }));
+  assert.ok(pop > rock);
+});
+
+test('фильтр по жанру и эпохе оставляет только подходящее', () => {
+  const profile = buildProfile([], [], NOW);
+  const items = [
+    { ...track(1, 'a', 'rap'), year: 2026 },
+    { ...track(2, 'b', 'rock'), year: 2026 },
+    { ...track(3, 'c', 'rap'), year: 2015 },
+    { ...track(4, 'd', 'rap'), year: null },
+  ];
+  const ids = (filters) => pickBatch(items, profile, context({ filters }), 5).map((item) => item.id).sort();
+  assert.deepEqual(ids({ genre: 'rap' }), ['1', '3', '4']);
+  assert.deepEqual(ids({ era: 'fresh' }), ['1', '2']);
+  assert.deepEqual(ids({ genre: 'rap', era: 'tens' }), ['3']);
+});
+
+test('волна по треку ставит найденное от него выше остального', () => {
+  const profile = buildProfile([track(9, 'love')], [], NOW);
+  const favourite = track(1, 'love');
+  const similar = { ...track(2, 'other', 'pop'), fromSeed: true };
+  const [first] = pickBatch([favourite, similar], profile, context({ seed: { genre: 'pop' } }), 1);
+  assert.equal(first.id, '2');
+});
+
+test('не даёт подряд треки одного альбома и один жанр потоком', () => {
+  const profile = buildProfile([], [], NOW);
+  const album = [1, 2, 3].map((id) => ({ ...track(id, `a${id}`), albumId: 'same' }));
+  const others = [4, 5].map((id) => ({ ...track(id, `b${id}`), albumId: `x${id}` }));
+  const batch = pickBatch([...album, ...others], profile, context({ mode: MODES.familiar }), 3);
+  assert.ok(batch.filter((item) => item.albumId === 'same').length < 3);
+
+  const rap = [1, 2, 3, 4].map((id) => track(id, `r${id}`, 'rap'));
+  const rock = [5, 6].map((id) => track(id, `k${id}`, 'rock'));
+  const run = pickBatch([...rap, ...rock], profile, context({ mode: MODES.familiar }), 4).map((item) => item.genre);
+  assert.ok(run.includes('rock'));
+});
+
+test('в миксе на отдельных местах приоритет у незнакомых артистов', () => {
+  const known = [1, 2, 3, 4].map((id) => track(id, `k${id}`));
+  const unknown = track(5, 'new');
+  const profile = buildProfile(known, [], NOW);
+  const batch = pickBatch([...known, unknown], profile, context(), 4);
+  assert.equal(batch[3].id, '5');
 });

@@ -30,7 +30,10 @@
 
     try {
       await music.setLiked(track.provider, track.id, next);
-      if (next) music.waveEvent(track, 'like');
+      if (next) {
+        music.waveEvent(track, 'like');
+        document.dispatchEvent(new CustomEvent('quad:liked', { detail: track }));
+      }
       document.dispatchEvent(new CustomEvent('quad:library-changed'));
     } catch {
       if (next) liked.delete(key);
