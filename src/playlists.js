@@ -43,6 +43,7 @@ async function library() {
   return (await load()).map((playlist) => ({
     provider: id,
     id: playlist.id,
+    group: 'playlists',
     title: playlist.title,
     count: playlist.tracks.length,
     cover: playlist.tracks[0]?.coverMedium ?? null,

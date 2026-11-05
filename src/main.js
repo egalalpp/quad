@@ -117,7 +117,7 @@ ipcMain.handle('music:disconnect', (_event, id) => providerById(id).logout());
 ipcMain.handle('music:stream', (_event, id, trackId) => providerById(id).streamUrl(trackId));
 
 // Сначала текст самого сервиса, а если его нет или он не загрузился, то запасной источник.
-ipcMain.handle('music:lyrics', async (_event, track) => {
+async function lyricsOf(track) {
   if (track.lyrics) {
     try {
       return await providerById(track.provider).lyrics(track.id, track.lyrics);
@@ -126,7 +126,9 @@ ipcMain.handle('music:lyrics', async (_event, track) => {
     }
   }
   return lyrics.find(track);
-});
+}
+
+ipcMain.handle('music:lyrics', (_event, track) => lyricsOf(track));
 
 ipcMain.handle('music:collection', (_event, id, collectionId, offset) => (
   providerById(id).collection(collectionId, offset)
@@ -202,9 +204,13 @@ ipcMain.on('update:open-page', () => updater.openPage());
 ipcMain.handle('downloads:folder', () => downloads.folder());
 ipcMain.handle('downloads:choose', (event) => downloads.chooseFolder(senderWindow(event)));
 ipcMain.handle('downloads:open', () => downloads.openFolder());
-ipcMain.handle('downloads:save', async (_event, track) => (
-  downloads.save(track, await providerById(track.provider).streamUrl(track.id))
-));
+ipcMain.handle('downloads:save', async (_event, track) => {
+  const [stream, text] = await Promise.all([
+    providerById(track.provider).streamUrl(track.id),
+    lyricsOf(track).catch(() => null),
+  ]);
+  return downloads.save(track, stream, text);
+});
 ipcMain.handle('downloads:is-saved', (_event, track) => downloads.isSaved(track));
 
 ipcMain.handle('playlists:list', () => playlists.load());

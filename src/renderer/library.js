@@ -1,4 +1,11 @@
 (() => {
+  const FOLDED_KEY = 'quad.libraryFolded';
+  const GROUPS = [
+    ['playlists', 'Плейлисты', 'Свои плейлисты появятся здесь'],
+    ['albums', 'Альбомы', 'Добавленные альбомы появятся здесь'],
+    ['collections', 'Сборники', 'Добавленные сборники появятся здесь'],
+  ];
+
   const view = document.getElementById('view-library');
   const message = document.getElementById('library-message');
   const page = document.getElementById('library-page');
@@ -8,6 +15,8 @@
   let request = 0;
   let stale = true;
   let activeId = null;
+  let shown = [];
+  const folded = new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]'));
 
   function showMessage(text) {
     message.textContent = text;
@@ -20,7 +29,7 @@
     trackList.extras.querySelector('.is-active')?.classList.remove('is-active');
     link.classList.add('is-active');
     activeId = collection.id;
-    const { count } = collection;
+    const { count = 0 } = collection;
     trackList.open({
       ...collection,
       subtitle: `${count} ${quadPlayer.plural(count, 'трек', 'трека', 'треков')}`,
@@ -53,8 +62,57 @@
     count.textContent = collection.count;
 
     link.append(thumb, title, count);
+    link.classList.toggle('is-active', collection.id === activeId);
     link.addEventListener('click', () => open(collection, link));
     return link;
+  }
+
+  function toggleGroup(group) {
+    if (folded.has(group)) folded.delete(group);
+    else folded.add(group);
+    localStorage.setItem(FOLDED_KEY, JSON.stringify([...folded]));
+    renderLinks();
+  }
+
+  function createHeading(group, title, count) {
+    const heading = document.createElement('button');
+    heading.className = 'collection-heading';
+    heading.classList.toggle('is-folded', folded.has(group));
+    heading.setAttribute('aria-expanded', String(!folded.has(group)));
+
+    const name = document.createElement('span');
+    name.textContent = title;
+    const total = document.createElement('span');
+    total.className = 'collection-link-count';
+    total.textContent = count;
+
+    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    arrow.setAttribute('viewBox', '0 0 14 14');
+    arrow.innerHTML = '<path d="M3 5l4 4 4-4"/>';
+
+    heading.append(name, total, arrow);
+    heading.addEventListener('click', () => toggleGroup(group));
+    return heading;
+  }
+
+  function createNote(text) {
+    const note = document.createElement('p');
+    note.className = 'collection-note';
+    note.textContent = text;
+    return note;
+  }
+
+  // Сверху то, что есть всегда, ниже разделы. Плейлисты всех сервисов идут в одном разделе.
+  function renderLinks() {
+    trackList.extras.replaceChildren(
+      ...shown.filter((collection) => !collection.group).map(createLink),
+      ...GROUPS.flatMap(([group, title, empty]) => {
+        const items = shown.filter((collection) => collection.group === group);
+        const heading = createHeading(group, title, items.length);
+        if (folded.has(group)) return [heading];
+        return [heading, ...(items.length > 0 ? items.map(createLink) : [createNote(empty)])];
+      }),
+    );
   }
 
   async function load() {
@@ -75,7 +133,9 @@
       message.hidden = true;
       page.hidden = false;
       view.classList.remove('view-center');
-      trackList.extras.replaceChildren(...collections.map(createLink));
+      shown = collections;
+      activeId = null;
+      renderLinks();
       trackList.extras.firstElementChild?.click();
     } catch {
       if (current === request) {
@@ -101,12 +161,8 @@
       return;
     }
 
-    const collections = await music.library();
-    trackList.extras.replaceChildren(...collections.map((collection) => {
-      const link = createLink(collection);
-      link.classList.toggle('is-active', collection.id === activeId);
-      return link;
-    }));
+    shown = await music.library();
+    renderLinks();
   }
 
   document.addEventListener('quad:accounts', reloadOnAccounts);

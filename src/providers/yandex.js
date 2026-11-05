@@ -95,6 +95,7 @@ function lyricsKind(info) {
 function toTrack(track) {
   const album = track.albums?.[0];
   const label = album?.labels?.[0];
+  const place = album?.trackPosition;
   return {
     provider: id,
     providerName: name,
@@ -108,6 +109,14 @@ function toTrack(track) {
     coverLarge: coverUrl(track.coverUri, LARGE_COVER_SIZE),
     album: album?.title ?? null,
     albumId: album ? String(album.id) : null,
+    albumArtists: album?.artists?.map((artist) => artist.name).join(', ') || null,
+    albumTracks: album?.trackCount ?? null,
+    trackNumber: place?.index ?? null,
+    discNumber: place?.volume ?? null,
+    releaseDate: album?.releaseDate ?? null,
+    originalYear: album?.originalReleaseYear ?? null,
+    explicit: track.contentWarning === 'explicit',
+    page: album ? `https://music.yandex.ru/album/${album.id}/track/${track.id}` : null,
     year: album?.year ?? null,
     genre: album?.genre ?? null,
     label: typeof label === 'string' ? label : label?.name ?? null,
@@ -219,11 +228,62 @@ function fetchLikes() {
   return likesRequest;
 }
 
+const newestFirst = (a, b) => new Date(b.timestamp) - new Date(a.timestamp);
+
+// Добавленный альбом. Сборники исполнителей Яндекс помечает типом compilation.
+function toLikedAlbum({ album }) {
+  const collectionId = `album:${album.id}`;
+  return {
+    provider: id,
+    id: collectionId,
+    collectionId,
+    kind: 'album',
+    group: album.type === 'compilation' ? 'collections' : 'albums',
+    title: album.title,
+    count: album.trackCount,
+    cover: coverUrl(album.coverUri, MEDIUM_COVER_SIZE),
+  };
+}
+
+// Чужой плейлист, добавленный себе: в приложении Яндекса это и есть подборки.
+function toLikedPlaylist({ playlist }) {
+  const collectionId = `playlist:${playlist.uid}:${playlist.kind}`;
+  return {
+    provider: id,
+    id: collectionId,
+    collectionId,
+    kind: 'playlist',
+    group: 'collections',
+    title: playlist.title,
+    count: playlist.trackCount,
+    cover: coverUrl(playlist.cover?.uri ?? playlist.ogImage, MEDIUM_COVER_SIZE),
+  };
+}
+
+// Если один из списков не загрузился, остальная медиатека всё равно открывается.
+async function likedCollections(user) {
+  const [albums, playlists] = await Promise.allSettled([
+    getResult(`/users/${user}/likes/albums?rich=true`),
+    getResult(`/users/${user}/likes/playlists`),
+  ]);
+  return [
+    ...(albums.status === 'fulfilled' ? albums.value : [])
+      .filter((item) => item.album?.available !== false && item.album)
+      .sort(newestFirst)
+      .map(toLikedAlbum),
+    ...(playlists.status === 'fulfilled' ? playlists.value : [])
+      .filter((item) => item.playlist)
+      .sort(newestFirst)
+      .map(toLikedPlaylist),
+  ];
+}
+
 async function library() {
   const user = await uid();
-  const [likes, playlists] = await Promise.all([
+  const [likes, playlists, added] = await Promise.all([
     fetchLikes(),
     getResult(`/users/${user}/playlists/list`),
+    likedCollections(user),
   ]);
 
   return [
@@ -237,10 +297,12 @@ async function library() {
     ...playlists.map((playlist) => ({
       provider: id,
       id: String(playlist.kind),
+      group: 'playlists',
       title: playlist.title,
       count: playlist.trackCount,
       cover: coverUrl(playlist.cover?.uri ?? playlist.ogImage, MEDIUM_COVER_SIZE),
     })),
+    ...added,
   ];
 }
 
@@ -253,6 +315,11 @@ async function collectionTrackIds(collectionId) {
   if (kind === 'album') {
     const { volumes } = await getResult(`/albums/${encodeURIComponent(entityId)}/with-tracks`);
     return volumes.flat().map((track) => String(track.id));
+  }
+  if (kind === 'playlist') {
+    const [, owner, playlistKind] = collectionId.split(':');
+    const playlist = await getResult(`/users/${encodeURIComponent(owner)}/playlists/${encodeURIComponent(playlistKind)}`);
+    return playlist.tracks.map((item) => String(item.id));
   }
 
   if (collectionId === 'liked') {

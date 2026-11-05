@@ -4,10 +4,12 @@ const { createWriteStream } = require('node:fs');
 const path = require('node:path');
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { buildTag, withoutExistingTag } = require('./id3');
 
 const id = 'downloads';
 const MAX_NAME_LENGTH = 150;
 const REQUEST_TIMEOUT = 120000;
+const COVER_TIMEOUT = 15000;
 const MAX_ADOPTED_PER_RUN = 20;
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -112,7 +114,21 @@ async function adopt(findTracks) {
   }
 }
 
-async function save(track, stream) {
+// Без обложки трек всё равно сохраняется: она украшение, а не повод терять файл.
+async function loadCover(track) {
+  const url = track.coverLarge ?? track.cover;
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(COVER_TIMEOUT) });
+    if (!response.ok) return null;
+    const mime = response.headers.get('content-type')?.split(';')[0] ?? 'image/jpeg';
+    return { mime, data: Buffer.from(await response.arrayBuffer()) };
+  } catch {
+    return null;
+  }
+}
+
+async function save(track, stream, lyrics) {
   if (stream.preview) throw new Error('Доступен только отрывок');
 
   const directory = await folder();
@@ -120,12 +136,16 @@ async function save(track, stream) {
   const target = path.join(directory, fileName(track));
   const partial = `${target}.part`;
 
-  const response = await fetch(stream.url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) });
+  const [response, cover] = await Promise.all([
+    fetch(stream.url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT) }),
+    loadCover(track),
+  ]);
   if (!response.ok) throw new Error(`Файл недоступен: ${response.status}`);
 
   // Недокачанный файл не должен выглядеть как готовый трек.
   try {
-    await pipeline(Readable.fromWeb(response.body), createWriteStream(partial));
+    await fs.writeFile(partial, buildTag({ track, lyrics, cover }));
+    await pipeline(Readable.fromWeb(response.body), withoutExistingTag(), createWriteStream(partial, { flags: 'a' }));
     await fs.rename(partial, target);
   } catch (error) {
     await fs.rm(partial, { force: true });

@@ -210,15 +210,16 @@
 
       const liked = collections.filter((collection) => collection.id === 'liked')
         .reduce((total, collection) => total + collection.count, 0);
-      const playlists = collections.filter((collection) => (
-        collection.id !== 'liked' && collection.provider !== 'downloads'
-      )).length;
+      const inGroup = (name) => collections.filter((collection) => collection.group === name).length;
+      const albums = inGroup('albums');
+      const playlists = inGroup('playlists') + inGroup('collections');
 
       pool = tracks.filter((track) => track.coverMedium);
       stats.textContent = [
         `${liked} ${quadPlayer.plural(liked, 'трек', 'трека', 'треков')}`,
-        `${playlists} ${quadPlayer.plural(playlists, 'плейлист', 'плейлиста', 'плейлистов')}`,
-      ].join(' · ');
+        albums > 0 && `${albums} ${quadPlayer.plural(albums, 'альбом', 'альбома', 'альбомов')}`,
+        playlists > 0 && `${playlists} ${quadPlayer.plural(playlists, 'плейлист', 'плейлиста', 'плейлистов')}`,
+      ].filter(Boolean).join(' · ');
       secondButton.textContent = 'Медиатека';
       secondButton.dataset.target = 'library';
       mixButton.hidden = liked === 0;

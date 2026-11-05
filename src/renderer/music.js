@@ -234,12 +234,16 @@
     const like = rowAction('like-button row-like', 'Мне нравится', 'heart-icon');
     like.classList.toggle('is-liked', quadPlayer.isLiked(track));
 
+    const wave = rowAction('row-wave', 'Волна по этому треку', 'wave-icon');
+    wave.dataset.tip = 'Волна по этому треку';
+    wave.addEventListener('click', () => quadWave.startFrom(track));
+
     const next = rowAction('row-next', 'Играть следующим', 'next-icon');
     next.dataset.tip = 'Играть следующим';
     next.addEventListener('click', () => addNext(track));
 
     const actions = element('span', 'row-actions');
-    actions.append(next, like, rowAction('row-add', 'Добавить в плейлист', 'plus-icon'));
+    actions.append(wave, next, like, rowAction('row-add', 'Добавить в плейлист', 'plus-icon'));
     if (onRemove) {
       const remove = rowAction('row-remove', 'Убрать из плейлиста', 'cross-icon');
       remove.addEventListener('click', () => onRemove(track));
