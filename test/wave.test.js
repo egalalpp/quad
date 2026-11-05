@@ -4,7 +4,9 @@ const {
   MODES,
   buildProfile,
   dislikesOf,
+  favouriteNames,
   historyOf,
+  mentions,
   pickBatch,
   scoreTrack,
   sessionOf,
@@ -210,10 +212,104 @@ test('не даёт подряд треки одного альбома и од�
   assert.ok(run.includes('rock'));
 });
 
-test('в миксе на отдельных местах приоритет у незнакомых артистов', () => {
-  const known = [1, 2, 3, 4].map((id) => track(id, `k${id}`));
-  const unknown = track(5, 'new');
-  const profile = buildProfile(known, [], NOW);
-  const batch = pickBatch([...known, unknown], profile, context(), 4);
-  assert.equal(batch[3].id, '5');
+// Лайки, треки знакомых артистов и совсем новое, у каждого трека свой артист.
+function pool(size = 20) {
+  const ids = Array.from({ length: size }, (_, i) => i);
+  const liked = ids.map((i) => track(100 + i, `liked${i}`));
+  const known = ids.map((i) => track(200 + i, `liked${i}`));
+  const fresh = ids.map((i) => track(300 + i, `fresh${i}`));
+  return {
+    liked,
+    known,
+    fresh,
+    likedKeys: new Set(liked.map((item) => `y:${item.id}`)),
+    profile: buildProfile(liked, [], NOW),
+  };
+}
+
+function shareOf(batch) {
+  const count = (from, to) => batch.filter((item) => Number(item.id) >= from && Number(item.id) < to).length;
+  return [count(100, 200), count(200, 300), count(300, 400)];
+}
+
+test('каждый режим держит свою долю лайков, знакомого и нового', () => {
+  const { liked, known, fresh, likedKeys, profile } = pool();
+  const batchOf = (mode) => pickBatch([...fresh, ...known, ...liked], profile, context({ mode, likedKeys }), 10);
+  assert.deepEqual(shareOf(batchOf(MODES.familiar)), [7, 2, 1]);
+  assert.deepEqual(shareOf(batchOf(MODES.mix)), [4, 3, 3]);
+  assert.deepEqual(shareOf(batchOf(MODES.discover)), [0, 2, 8]);
+});
+
+test('микс не сливается с новым, даже если новых кандидатов намного больше', () => {
+  const { liked, fresh, likedKeys, profile } = pool(60);
+  const batch = pickBatch([...fresh, ...liked.slice(0, 6)], profile, context({ likedKeys }), 10);
+  assert.ok(shareOf(batch)[0] >= 4);
+});
+
+test('режим Новое не ставит лайки, даже если больше ставить нечего', () => {
+  const { liked, likedKeys, profile } = pool();
+  assert.deepEqual(pickBatch(liked, profile, context({ mode: MODES.discover, likedKeys }), 5), []);
+});
+
+test('новое с эпохой не откатывается на лайки', () => {
+  const { likedKeys, profile } = pool();
+  const oldLiked = { ...track(100, 'liked0'), year: 1999 };
+  const oldFresh = { ...track(300, 'fresh0'), year: 1998 };
+  const batch = pickBatch([oldLiked, oldFresh], profile, context({
+    mode: MODES.discover,
+    likedKeys,
+    filters: { era: 'older' },
+  }), 5);
+  assert.deepEqual(batch.map((item) => item.id), ['300']);
+});
+
+test('когда вид кончился, места занимают другие', () => {
+  const { known, fresh, likedKeys, profile } = pool();
+  const batch = pickBatch([...known, ...fresh], profile, context({ mode: MODES.familiar, likedKeys }), 10);
+  assert.equal(batch.length, 10);
+  assert.equal(shareOf(batch)[0], 0);
+});
+
+test('уже слышанный трек не считается новым', () => {
+  const { likedKeys, profile } = pool();
+  const heard = track(300, 'fresh0');
+  const history = historyOf([event(heard, 'finish', 40 * DAY)]);
+  const batch = pickBatch([heard, track(301, 'fresh1')], profile, context({ mode: MODES.discover, likedKeys, history }), 1);
+  assert.equal(batch[0].id, '301');
+});
+
+test('серия пропусков отдаёт часть лайков новому', () => {
+  const { liked, known, fresh, likedKeys, profile } = pool();
+  const session = { streak: 3, genres: new Map() };
+  const batch = pickBatch([...fresh, ...known, ...liked], profile, context({ likedKeys, session }), 10);
+  const [likedCount, , freshCount] = shareOf(batch);
+  assert.ok(likedCount < 4, String(likedCount));
+  assert.ok(freshCount > 3, String(freshCount));
+});
+
+test('внутри одного вида сервисы идут по очереди', () => {
+  const { likedKeys, profile } = pool();
+  const service = (provider, from) => Array.from({ length: 6 }, (_, i) => ({ ...track(from + i, `${provider}${i}`), provider }));
+  const batch = pickBatch([...service('y', 300), ...service('s', 310)], profile, context({ mode: MODES.discover, likedKeys }), 6);
+  assert.deepEqual(batch.map((item) => item.provider).sort().join(''), 'sssyyy');
+});
+
+test('один сервис без лайков не размывает режим Любимое', () => {
+  const { liked, likedKeys, profile } = pool();
+  const other = Array.from({ length: 20 }, (_, i) => ({ ...track(300 + i, `s${i}`), provider: 's' }));
+  const batch = pickBatch([...other, ...liked], profile, context({ mode: MODES.familiar, likedKeys }), 10);
+  assert.equal(batch.filter((item) => item.provider === 'y').length >= 7, true);
+});
+
+test('чаще встречающийся артист идёт первым', () => {
+  const liked = (...names) => ({ artistList: names.map((name) => ({ id: name, name })) });
+  assert.deepEqual(favouriteNames([liked('A'), liked('B', 'C'), liked('B')]), ['B', 'A', 'C']);
+  assert.deepEqual(favouriteNames([]), []);
+});
+
+test('найденный трек должен упоминать артиста', () => {
+  const found = { artists: 'trashpixels', title: 'Burial-Archangel' };
+  assert.equal(mentions(found, 'burial'), true);
+  assert.equal(mentions(found, 'Trashpixels'), true);
+  assert.equal(mentions(found, 'Radiohead'), false);
 });

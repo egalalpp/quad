@@ -1,12 +1,13 @@
 const { app, dialog, shell } = require('electron');
 const fs = require('node:fs/promises');
-const { createWriteStream } = require('node:fs');
+const { createReadStream, createWriteStream } = require('node:fs');
 const path = require('node:path');
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { buildTag, withoutExistingTag } = require('./id3');
 
 const id = 'downloads';
+const FILE_SCHEME = 'quad-file';
 const MAX_NAME_LENGTH = 150;
 const REQUEST_TIMEOUT = 120000;
 const COVER_TIMEOUT = 15000;
@@ -85,6 +86,48 @@ async function existingRecords() {
   return records.filter((_record, index) => flags[index]);
 }
 
+async function recordOf(provider, trackId) {
+  const record = (await readRecords()).find((item) => item.provider === provider && item.id === trackId);
+  return record && await fileExists(record.file) ? record : null;
+}
+
+// Скачанный трек играет с диска: быстрее, без интернета и в полном качестве файла.
+async function localStream(provider, trackId) {
+  if (!await recordOf(provider, trackId)) return null;
+  const parts = [provider, trackId].map(encodeURIComponent).join('/');
+  return { url: `${FILE_SCHEME}://track/${parts}`, preview: false, quality: 'файл на диске', local: true };
+}
+
+// Отдаёт только файлы из списка скачанных, по номеру трека, а не по пути.
+// Плеер перематывает запросами с диапазоном байтов, поэтому они разбираются здесь.
+async function serveFile(request) {
+  const [provider, trackId] = new URL(request.url).pathname.slice(1).split('/').map(decodeURIComponent);
+  const record = await recordOf(provider, trackId);
+  if (!record) return new Response(null, { status: 404 });
+
+  const { size } = await fs.stat(record.file);
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('range') ?? '');
+  let start = 0;
+  let end = size - 1;
+  if (range?.[1]) start = Number(range[1]);
+  if (range?.[2]) end = range[1] ? Math.min(Number(range[2]), size - 1) : size - 1;
+  if (range && !range[1] && range[2]) start = Math.max(0, size - Number(range[2]));
+
+  const headers = {
+    'Accept-Ranges': 'bytes',
+    'Access-Control-Allow-Origin': '*',
+    'Content-Length': String(end - start + 1),
+    'Content-Type': 'audio/mpeg',
+  };
+  if (start >= size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+  if (range) headers['Content-Range'] = `bytes ${start}-${end}/${size}`;
+
+  return new Response(Readable.toWeb(createReadStream(record.file, { start, end })), {
+    status: range ? 206 : 200,
+    headers,
+  });
+}
+
 async function isSaved(track) {
   if (await fileExists(path.join(await folder(), fileName(track)))) return true;
   return (await existingRecords()).some((record) => sameTrack(record, track));
@@ -159,4 +202,17 @@ async function save(track, stream, lyrics) {
   return target;
 }
 
-module.exports = { id, folder, chooseFolder, openFolder, save, isSaved, library, collection, adopt };
+module.exports = {
+  FILE_SCHEME,
+  id,
+  folder,
+  chooseFolder,
+  openFolder,
+  save,
+  isSaved,
+  library,
+  collection,
+  adopt,
+  localStream,
+  serveFile,
+};

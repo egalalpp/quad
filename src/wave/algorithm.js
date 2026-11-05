@@ -6,8 +6,8 @@
 //    жанры из последних действий поднимаются или опускаются сразу.
 // 3. Каждый трек-кандидат получает оценку: подходит ли вкусу, насколько он новый
 //    (знакомое или открытие зависит от режима), давно ли звучал, пропускали ли его.
-// 4. Партия собирается жадно: без одного артиста подряд, без потока из одного альбома
-//    и жанра, а на отдельных местах приоритет у незнакомых артистов.
+// 4. Партия собирается жадно: без одного артиста подряд, без потока из одного альбома и жанра.
+//    Доли лайков, знакомого и совсем нового задаёт режим, а сервисы внутри доли идут по очереди.
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
@@ -33,6 +33,9 @@ const ARTIST_DISLIKE_PENALTY = 0.8;
 const SESSION_WINDOW = 45 * 60 * 1000;
 const MAX_SKIP_STREAK = 3;
 const STREAK_NOVELTY = 0.3;
+
+// Столько от доли лайков уступает новому за каждый пропуск подряд.
+const STREAK_SHARE = 0.1;
 const STREAK_JITTER = 0.35;
 const SESSION_WARM = 0.15;
 const SESSION_COLD = 0.25;
@@ -46,17 +49,18 @@ const ARTIST_REPEAT_PENALTY = 0.9;
 const ALBUM_REPEAT_PENALTY = 0.5;
 const GENRE_RUN = 2;
 const GENRE_RUN_PENALTY = 0.35;
-const EXPLORE_BONUS = 1.5;
 
 const ARTIST_SCORE = 1.2;
 const GENRE_SCORE = 0.8;
 const SEED_SCORE = 1.4;
 const SEED_GENRE_SCORE = 0.4;
 
+// shares: какая часть партии отдана лайкам, знакомому (твои артисты и уже слышанное) и совсем новому.
+// Без явных долей режимы сливаются: новых кандидатов всегда больше, и они вытесняют лайки целиком.
 const MODES = {
-  familiar: { novelty: -0.7, jitter: 0.5, exploreEvery: 0 },
-  mix: { novelty: 0.25, jitter: 0.7, exploreEvery: 4 },
-  discover: { novelty: 1, jitter: 0.8, exploreEvery: 2 },
+  familiar: { novelty: -0.7, jitter: 0.5, shares: { liked: 0.7, known: 0.2, fresh: 0.1 } },
+  mix: { novelty: 0.25, jitter: 0.7, shares: { liked: 0.4, known: 0.3, fresh: 0.3 } },
+  discover: { novelty: 1, jitter: 0.8, shares: { liked: 0, known: 0.2, fresh: 0.8 } },
 };
 
 const ERAS = {
@@ -64,6 +68,8 @@ const ERAS = {
   tens: (year) => year >= 2010 && year < 2020,
   older: (year) => year < 2010,
 };
+
+const ANY_KIND = 'any';
 
 const trackKey = (track) => `${track.provider}:${track.id}`;
 
@@ -119,6 +125,18 @@ function buildProfile(likedTracks, events, now, dislikes = []) {
   });
 
   return { artists: normalise(artists), genres: normalise(genres) };
+}
+
+// Имена артистов: те, чьих треков больше, впереди.
+function favouriteNames(tracks) {
+  const counts = new Map();
+  tracks.forEach((track) => track.artistList.forEach(({ name }) => addWeight(counts, name, 1)));
+  return [...counts].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+}
+
+// Поиск приносит и случайные совпадения: имя должно быть в авторе или названии.
+function mentions(track, name) {
+  return `${track.artists} ${track.title}`.toLowerCase().includes(name.toLowerCase());
 }
 
 function historyOf(events) {
@@ -209,8 +227,29 @@ function scoreTrack(track, profile, context) {
     - replay - skipped - ARTIST_DISLIKE_PENALTY * artistDislikes + jitter;
 }
 
+function kindOf(track, profile, { history, likedKeys }) {
+  const key = trackKey(track);
+  if (likedKeys.has(key)) return 'liked';
+  return history.lastPlayed.has(key) || strongestArtist(track, profile) > 0 ? 'known' : 'fresh';
+}
+
+// Серия пропусков значит, что знакомое сейчас не заходит: часть лайков уступает место новому.
+function sharesOf({ shares }, streak) {
+  const moved = shares.liked * STREAK_SHARE * streak;
+  return { ...shares, liked: shares.liked - moved, fresh: shares.fresh + moved };
+}
+
+// Сначала тот вид, который сильнее всего отстал от своей доли на этом месте партии.
+function kindsByNeed(shares, counts, position) {
+  const lag = (kind) => shares[kind] * (position + 1) - counts[kind];
+  return Object.keys(shares)
+    .filter((kind) => shares[kind] > 0)
+    .sort((a, b) => lag(b) - lag(a));
+}
+
 function pickBatch(candidates, profile, context, count) {
   const seen = new Set(context.exclude);
+  const shares = sharesOf(context.mode, context.session?.streak ?? 0);
   const scored = [];
 
   candidates.forEach((track) => {
@@ -219,44 +258,56 @@ function pickBatch(candidates, profile, context, count) {
     seen.add(key);
     if (!matchesFilters(track, context.filters, context.now)) return;
 
+    // Вид с нулевой долей запрещён: в режиме «Новое» лайк не появится, даже если больше ничего нет.
+    const kind = kindOf(track, profile, context);
+    if (shares[kind] === 0) return;
+
     const score = scoreTrack(track, profile, context);
     if (score === null) return;
-    const unknown = !context.likedKeys.has(key) && strongestArtist(track, profile) <= 0;
-    scored.push({ track, score, unknown });
+    scored.push({ track, score, kind });
   });
 
   const batch = [];
+  const kindCounts = { liked: 0, known: 0, fresh: 0 };
+  const providerCounts = new Map();
   const artistCounts = new Map();
   const albumCounts = new Map();
-  const { exploreEvery } = context.mode;
   let previousArtist = context.previousArtist ?? null;
   let lastGenre = null;
   let genreRun = 0;
 
-  while (batch.length < count && scored.length > 0) {
-    const exploring = exploreEvery > 0 && (batch.length + 1) % exploreEvery === 0;
-    let bestIndex = -1;
-    let bestValue = -Infinity;
+  const played = ({ track }) => providerCounts.get(track.provider) ?? 0;
 
-    scored.forEach(({ track, score, unknown }, index) => {
-      const [mainArtist] = artistKeys(track);
-      if (mainArtist === previousArtist) return;
-
-      let value = score - ARTIST_REPEAT_PENALTY * (artistCounts.get(mainArtist) ?? 0);
-      if (track.albumId) value -= ALBUM_REPEAT_PENALTY * (albumCounts.get(track.albumId) ?? 0);
-      if (genreRun >= GENRE_RUN && track.genre === lastGenre && !context.filters?.genre) value -= GENRE_RUN_PENALTY;
-      if (exploring && unknown) value += EXPLORE_BONUS;
-
-      if (value > bestValue) {
-        bestValue = value;
-        bestIndex = index;
-      }
-    });
-
-    if (bestIndex < 0) break;
-
-    const [{ track }] = scored.splice(bestIndex, 1);
+  function valueOf({ track, score }) {
     const [mainArtist] = artistKeys(track);
+    let value = score - ARTIST_REPEAT_PENALTY * (artistCounts.get(mainArtist) ?? 0);
+    if (track.albumId) value -= ALBUM_REPEAT_PENALTY * (albumCounts.get(track.albumId) ?? 0);
+    if (genreRun >= GENRE_RUN && track.genre === lastGenre && !context.filters?.genre) value -= GENRE_RUN_PENALTY;
+    return value;
+  }
+
+  // Лучший трек этого вида. Сервисы идут по очереди: следующий тот, кто звучал реже.
+  function bestOf(kind) {
+    const fitting = scored.filter((item) => (
+      (kind === ANY_KIND || item.kind === kind) && artistKeys(item.track)[0] !== previousArtist
+    ));
+    const turn = Math.min(...fitting.map(played));
+    return fitting
+      .filter((item) => played(item) === turn)
+      .reduce((best, item) => (best && valueOf(best) >= valueOf(item) ? best : item), null);
+  }
+
+  while (batch.length < count) {
+    // Волна от трека просит похожее на него, а не долю лайков: важнее всего близость к треку.
+    const kinds = context.seed ? [ANY_KIND] : kindsByNeed(shares, kindCounts, batch.length);
+    const pick = kinds.map(bestOf).find(Boolean);
+    if (!pick) break;
+
+    scored.splice(scored.indexOf(pick), 1);
+    const { track, kind } = pick;
+    const [mainArtist] = artistKeys(track);
+    kindCounts[kind] += 1;
+    addWeight(providerCounts, track.provider, 1);
     addWeight(artistCounts, mainArtist, 1);
     if (track.albumId) addWeight(albumCounts, track.albumId, 1);
     genreRun = track.genre === lastGenre ? genreRun + 1 : 1;
@@ -273,8 +324,10 @@ module.exports = {
   artistKeys,
   buildProfile,
   dislikesOf,
+  favouriteNames,
   historyOf,
   matchesFilters,
+  mentions,
   pickBatch,
   scoreTrack,
   sessionOf,

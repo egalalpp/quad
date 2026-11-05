@@ -206,12 +206,7 @@
       button.style.setProperty('--shift-y', '0px');
     });
 
-    button.addEventListener('click', () => {
-      scene.pluckAll(8);
-      if (!button.dataset.provider) {
-        note.textContent = `Подключение ${button.dataset.service} пока не готово`;
-      }
-    });
+    button.addEventListener('click', () => scene.pluckAll(8));
   });
 
   document.getElementById('intro-later').addEventListener('click', leave);

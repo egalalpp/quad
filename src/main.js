@@ -1,16 +1,25 @@
-const { app, BrowserWindow, Menu, ipcMain, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, protocol, session } = require('electron');
 const path = require('node:path');
 const downloads = require('./downloads');
 const lyrics = require('./lyrics');
 const playlists = require('./playlists');
 const updater = require('./updater');
-const yandex = require('./providers/yandex');
+const { planned, scopeOf, services } = require('./providers');
 const wave = require('./wave/service');
 
 const isMac = process.platform === 'darwin';
 
-const providers = { yandex };
-const trackSources = { ...providers, quad: playlists, downloads };
+// Свой адрес для скачанных файлов: с обычным file:// эквалайзер получил бы тишину.
+protocol.registerSchemesAsPrivileged([{
+  scheme: downloads.FILE_SCHEME,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+}]);
+
+const trackSources = {
+  ...Object.fromEntries(services.map((provider) => [provider.id, provider])),
+  quad: playlists,
+  downloads,
+};
 
 function providerById(id) {
   if (!Object.hasOwn(trackSources, id)) throw new Error(`Неизвестный сервис: ${id}`);
@@ -30,7 +39,7 @@ function shuffled(list) {
 // браузер не отдаёт в обработку данные с чужого домена, если сервер явно этого не разрешил.
 function allowAudioProcessing() {
   session.defaultSession.webRequest.onHeadersReceived(
-    { urls: ['https://*.yandex.net/*'] },
+    { urls: services.flatMap((provider) => provider.mediaHosts) },
     (details, callback) => {
       if (details.resourceType !== 'media' && details.resourceType !== 'image') {
         callback({});
@@ -104,17 +113,20 @@ ipcMain.on('window:toggle-maximize', (event) => {
   else win.maximize();
 });
 
-ipcMain.handle('music:accounts', () => Promise.all(
-  Object.values(providers).map(async (provider) => ({
+ipcMain.handle('music:accounts', async () => [
+  ...await Promise.all(services.map(async (provider) => ({
     id: provider.id,
     name: provider.name,
     ...(await provider.status()),
-  })),
-));
+  }))),
+  ...planned.map((service) => ({ ...service, planned: true, connected: false })),
+]);
 
 ipcMain.handle('music:connect', (event, id) => providerById(id).login(senderWindow(event)));
 ipcMain.handle('music:disconnect', (_event, id) => providerById(id).logout());
-ipcMain.handle('music:stream', (_event, id, trackId) => providerById(id).streamUrl(trackId));
+ipcMain.handle('music:stream', async (_event, id, trackId) => (
+  await downloads.localStream(id, trackId) ?? providerById(id).streamUrl(trackId)
+));
 
 // Сначала текст самого сервиса, а если его нет или он не загрузился, то запасной источник.
 async function lyricsOf(track) {
@@ -135,22 +147,21 @@ ipcMain.handle('music:collection', (_event, id, collectionId, offset) => (
 ));
 
 async function connectedProviders() {
-  const all = Object.values(providers);
-  const flags = await Promise.all(all.map((provider) => provider.isConnected()));
-  return all.filter((_provider, index) => flags[index]);
+  const flags = await Promise.all(services.map((provider) => provider.isConnected()));
+  return services.filter((_provider, index) => flags[index]);
 }
 
-// Спрашивает все подключённые сервисы и падает, только если не ответил ни один.
-async function fromConnected(ask) {
-  const connected = await connectedProviders();
+// Спрашивает выбранный сервис или все подключённые и падает, только если не ответил ни один.
+async function fromConnected(ask, source) {
+  const connected = scopeOf(await connectedProviders(), source);
   const results = await Promise.allSettled(connected.map(ask));
   const found = results.filter((result) => result.status === 'fulfilled');
   if (connected.length > 0 && found.length === 0) throw results[0].reason;
   return found.flatMap((result) => result.value);
 }
 
-ipcMain.handle('music:search', async (_event, text) => {
-  const results = await fromConnected(async (provider) => [await provider.search(text)]);
+ipcMain.handle('music:search', async (_event, text, source) => {
+  const results = await fromConnected(async (provider) => [await provider.search(text)], source);
   return {
     best: results.find((result) => result.best)?.best ?? null,
     tracks: results.flatMap((result) => result.tracks),
@@ -187,7 +198,7 @@ ipcMain.handle('wave:event', (_event, track, type, heard) => wave.recordEvent(tr
 ipcMain.handle('wave:similar', async (_event, track, count, exclude) => (
   wave.similar(await connectedProviders(), track, count, exclude)
 ));
-ipcMain.handle('wave:genres', async () => wave.topGenres(await connectedProviders()));
+ipcMain.handle('wave:genres', async (_event, source) => wave.topGenres(await connectedProviders(), source));
 ipcMain.handle('wave:dislike', (_event, track) => wave.dislike(track));
 ipcMain.handle('wave:undislike', (_event, key) => wave.undislike(key));
 ipcMain.handle('wave:dislikes', () => wave.dislikes());
@@ -243,6 +254,7 @@ Menu.setApplicationMenu(isMac
   : null);
 
 app.whenReady().then(() => {
+  protocol.handle(downloads.FILE_SCHEME, downloads.serveFile);
   allowAudioProcessing();
   createWindow();
   app.on('activate', () => {

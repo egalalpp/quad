@@ -11,12 +11,19 @@
   const page = document.getElementById('library-page');
   const navItem = document.querySelector('[data-view="library"]');
   const trackList = new TrackList(page);
+  const sources = new SourceSwitch(document.getElementById('library-sources'), {
+    storageKey: 'quad.librarySource',
+    onChange: showSource,
+  });
 
   let request = 0;
   let stale = true;
   let activeId = null;
   let shown = [];
   const folded = new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]'));
+
+  // У разных сервисов бывают одинаковые номера, например «liked».
+  const linkKey = (collection) => `${collection.provider}:${collection.id}`;
 
   function showMessage(text) {
     message.textContent = text;
@@ -28,12 +35,12 @@
   function open(collection, link) {
     trackList.extras.querySelector('.is-active')?.classList.remove('is-active');
     link.classList.add('is-active');
-    activeId = collection.id;
+    activeId = linkKey(collection);
     const { count = 0 } = collection;
     trackList.open({
       ...collection,
       subtitle: `${count} ${quadPlayer.plural(count, 'трек', 'трека', 'треков')}`,
-      emptyText: collection.provider === 'downloads' ? 'Скачанных треков пока нет' : undefined,
+      emptyText: collection.provider === 'downloads' ? 'Скачанных треков пока нет' : 'Здесь пока пусто',
     });
   }
 
@@ -62,7 +69,7 @@
     count.textContent = collection.count;
 
     link.append(thumb, title, count);
-    link.classList.toggle('is-active', collection.id === activeId);
+    link.classList.toggle('is-active', linkKey(collection) === activeId);
     link.addEventListener('click', () => open(collection, link));
     return link;
   }
@@ -102,17 +109,27 @@
     return note;
   }
 
-  // Сверху то, что есть всегда, ниже разделы. Плейлисты всех сервисов идут в одном разделе.
+  // Сверху то, что есть всегда, ниже разделы.
   function renderLinks() {
+    const visible = shown.filter((collection) => sources.includes(collection.provider));
     trackList.extras.replaceChildren(
-      ...shown.filter((collection) => !collection.group).map(createLink),
+      ...visible.filter((collection) => !collection.group).map(createLink),
       ...GROUPS.flatMap(([group, title, empty]) => {
-        const items = shown.filter((collection) => collection.group === group);
+        const items = visible.filter((collection) => collection.group === group);
         const heading = createHeading(group, title, items.length);
         if (folded.has(group)) return [heading];
         return [heading, ...(items.length > 0 ? items.map(createLink) : [createNote(empty)])];
       }),
     );
+  }
+
+  const firstLink = () => trackList.extras.querySelector('.collection-link');
+
+  // Открытый список остаётся, если он есть и у выбранного сервиса, например Скачанные.
+  function showSource() {
+    if (page.hidden) return;
+    renderLinks();
+    if (!trackList.extras.querySelector('.collection-link.is-active')) firstLink()?.click();
   }
 
   async function load() {
@@ -136,7 +153,7 @@
       shown = collections;
       activeId = null;
       renderLinks();
-      trackList.extras.firstElementChild?.click();
+      firstLink()?.click();
     } catch {
       if (current === request) {
         stale = true;

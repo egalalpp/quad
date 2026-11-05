@@ -12,6 +12,15 @@
   const results = document.getElementById('search-results');
   const scroller = document.querySelector('.scroll');
 
+  const sources = new SourceSwitch(document.getElementById('search-sources'), {
+    storageKey: 'quad.searchSource',
+    onChange: () => {
+      const text = input.value.trim();
+      input.focus();
+      if (text) runSearch(text);
+    },
+  });
+
   let timer = 0;
   let request = 0;
 
@@ -139,15 +148,18 @@
     clearTimeout(timer);
     request += 1;
     const current = request;
+    results.classList.add('is-updating');
 
     try {
-      const found = await music.search(text);
+      const found = await music.search(text, sources.value);
       if (current !== request) return;
       const isEmpty = !found.best && found.tracks.length + found.artists.length + found.albums.length === 0;
       if (isEmpty) showIdle('Ничего не нашлось');
       else render(found);
     } catch {
       if (current === request) showIdle('Не удалось выполнить поиск');
+    } finally {
+      if (current === request) results.classList.remove('is-updating');
     }
   }
 

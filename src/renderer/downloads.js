@@ -11,8 +11,8 @@
   function render() {
     const track = quadPlayer.currentTrack();
     buttons.forEach((button) => {
-      button.hidden = !track;
-      if (!track) return;
+      button.hidden = !track || track.canDownload === false;
+      if (button.hidden) return;
       const key = keyOf(track);
       button.classList.toggle('is-busy', saving.has(key));
       button.classList.toggle('is-done', saved.has(key));

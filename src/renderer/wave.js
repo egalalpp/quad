@@ -46,6 +46,12 @@
   const genreBox = document.getElementById('wave-genres');
   const eraBox = document.getElementById('wave-eras');
   const seedChip = document.getElementById('wave-seed');
+  const sources = new SourceSwitch(document.getElementById('wave-sources'), {
+    storageKey: 'quad.waveSource',
+    allLabel: 'Вперемешку',
+    preferAll: true,
+    onChange: changeSource,
+  });
 
   // Ссылка на этот массив становится очередью, поэтому он меняется на месте.
   let queue = null;
@@ -62,7 +68,7 @@
   const genreName = (genre) => GENRE_NAMES[genre] ?? genre.charAt(0).toUpperCase() + genre.slice(1);
 
   function requestOptions(count, exclude, previousArtist) {
-    return { mode, count, exclude, previousArtist, filters, seed };
+    return { source: sources.value, mode, count, exclude, previousArtist, filters, seed };
   }
 
   async function load(count) {
@@ -79,6 +85,7 @@
       if (!isActive() || started !== rebuild) return;
       queue.push(...tracks);
       quadPlayer.renderQueue();
+      if (queue.length - quadPlayer.queueIndex() === 1) quadPlayer.showToast('Треки под эти настройки закончились');
     } catch {
       // Попробует ещё раз на следующем треке.
     } finally {
@@ -96,6 +103,8 @@
       queue.push(...tracks);
       if (tracks.length > 0) quadPlayer.play(queue, 0);
       else quadPlayer.showToast('Под такие настройки ничего не нашлось');
+    } catch {
+      quadPlayer.showToast('Не удалось собрать волну');
     } finally {
       loading = false;
       document.body.classList.remove('wave-loading');
@@ -225,6 +234,15 @@
     applyChanges();
   }
 
+  // Жанры у сервисов свои, поэтому выбранный на старом сервисе дальше не подходит.
+  function changeSource() {
+    filters = { ...filters, genre: null };
+    seed = null;
+    localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+    renderTune();
+    applyChanges();
+  }
+
   async function renderTune() {
     const active = [filters.genre, filters.era, seed].filter(Boolean).length;
     tuneToggle.textContent = active > 0 ? `Настроить · ${active}` : 'Настроить';
@@ -241,7 +259,7 @@
     seedChip.textContent = seed ? `От «${seed.title}»` : 'От этого трека';
 
     if (tunePanel.hidden) return;
-    const genres = await music.waveGenres().catch(() => []);
+    const genres = await music.waveGenres(sources.value).catch(() => []);
     const list = filters.genre && !genres.includes(filters.genre) ? [filters.genre, ...genres] : genres;
     genreBox.replaceChildren(
       chip('Любой', !filters.genre, () => setFilter('genre', filters.genre)),
@@ -333,6 +351,11 @@
   });
 
   dislikeButton.addEventListener('click', dislikeCurrent);
+
+  // Лайки и вкус подгружаются заранее, чтобы первый запуск волны не ждал ещё и их.
+  document.addEventListener('quad:accounts', () => {
+    if (quadPlayer.hasAccount()) music.waveGenres(sources.value).catch(() => {});
+  });
 
   showMode();
   renderTune();

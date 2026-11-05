@@ -19,6 +19,7 @@ const PAGE_SIZE = 100;
 
 const id = 'yandex';
 const name = 'Яндекс Музыка';
+const mediaHosts = ['https://*.yandex.net/*'];
 
 let accountUid = null;
 let likedTrackIds = null;
@@ -469,6 +470,7 @@ async function logout() {
 module.exports = {
   id,
   name,
+  mediaHosts,
   isConnected,
   status,
   search,

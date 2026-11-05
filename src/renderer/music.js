@@ -12,8 +12,24 @@
   const TOAST_ACTION_MS = 6000;
   const TALL_TIP_TARGET = 100;
 
+  // Следующий трек готовится заранее: чуть позже старта текущего и ещё раз перед его концом.
+  const PREPARE_DELAY = 1500;
+  const PREPARE_BEFORE_END = 20;
+  const PREPARED_LIFETIME = 4 * 60 * 1000;
+
+  // Трек, который не играет, не должен останавливать очередь, но и перебирать её бесконечно нельзя.
+  const SKIP_BROKEN_AFTER = 1200;
+  const MAX_BROKEN_IN_ROW = 5;
+
   const audio = new Audio();
   audio.crossOrigin = 'anonymous';
+
+  // Молчаливый плеер качает начало следующего трека: основной потом берёт уже скачанное.
+  const warmAudio = new Audio();
+  warmAudio.crossOrigin = 'anonymous';
+  warmAudio.preload = 'auto';
+  warmAudio.muted = true;
+
   const queueEmpty = document.getElementById('queue-empty');
   const queueList = document.getElementById('queue-list');
   const appAmbient = document.getElementById('app-ambient');
@@ -35,6 +51,7 @@
   const navAccountName = document.getElementById('nav-account-name');
   const navAccountNote = document.getElementById('nav-account-note');
   const connectNote = document.getElementById('connect-note');
+  const accountRows = document.getElementById('account-rows');
   const laterButton = document.getElementById('intro-later');
   const toast = document.getElementById('toast');
   const toastText = document.getElementById('toast-text');
@@ -55,6 +72,9 @@
   let toastTimer = 0;
   let listening = null;
   let playRequest = 0;
+  let prepared = null;
+  let prepareTimer = 0;
+  let brokenInRow = 0;
 
   const trackKey = (track) => `${track.provider}:${track.id}`;
   const currentTrack = () => detour ?? queue[queueIndex] ?? null;
@@ -126,18 +146,42 @@
 
   /* Аккаунты */
 
-  function renderAccounts() {
-    for (const account of accounts) {
-      const status = document.querySelector(`[data-account-status="${account.id}"]`);
-      const action = document.querySelector(`[data-account-action="${account.id}"]`);
-      const parts = [account.account ?? 'подключено'];
-      if (account.hasSubscription === false) parts.push('без Плюса');
+  async function toggleAccount(account) {
+    if (account.connected) {
+      await music.disconnect(account.id);
+      await refreshAccounts();
+    } else {
+      await connect(account.id);
+    }
+  }
 
-      status.textContent = account.connected ? parts.join(' · ') : 'не подключено';
-      status.classList.toggle('is-on', account.connected);
-      action.textContent = account.connected ? 'Выйти' : 'Подключить';
+  function accountRow(account) {
+    const parts = [account.account ?? 'подключено'];
+    if (account.hasSubscription === false) parts.push('без Плюса');
+
+    const status = element('span', 'status', account.connected ? parts.join(' · ') : 'не подключено');
+    status.classList.toggle('is-on', account.connected);
+    status.dataset.accountStatus = account.id;
+
+    const end = element('span', 'row-end');
+    end.append(status);
+    if (!account.planned) {
+      const action = element('button', 'row-action', account.connected ? 'Выйти' : 'Подключить');
+      action.dataset.accountAction = account.id;
+      action.addEventListener('click', () => toggleAccount(account));
+      end.append(action);
+    }
+
+    const row = element('li');
+    row.append(element('span', '', account.name), end);
+    return row;
+  }
+
+  function renderAccounts() {
+    accountRows.replaceChildren(...accounts.map(accountRow));
+    for (const account of accounts) {
       document.querySelector(`.service[data-provider="${account.id}"]`)
-        .classList.toggle('is-connected', account.connected);
+        ?.classList.toggle('is-connected', account.connected);
     }
 
     const connected = accounts.find((account) => account.connected);
@@ -162,28 +206,19 @@
     return connected;
   }
 
-  document.querySelectorAll('.service[data-provider]').forEach((button) => {
+  document.querySelectorAll('.service').forEach((button) => {
     button.addEventListener('click', async () => {
       if (button.classList.contains('is-connected')) return;
+      if (accounts.find((account) => account.id === button.dataset.provider)?.planned) {
+        connectNote.textContent = `Подключение ${button.dataset.service} пока не готово`;
+        return;
+      }
       connectNote.textContent = 'Войдите в открывшемся окне';
       try {
         const connected = await connect(button.dataset.provider);
         connectNote.textContent = connected ? `${button.textContent.trim()}: подключено` : '';
       } catch {
         connectNote.textContent = 'Не удалось подключить аккаунт';
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-account-action]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const id = button.dataset.accountAction;
-      const account = accounts.find((item) => item.id === id);
-      if (account.connected) {
-        await music.disconnect(id);
-        await refreshAccounts();
-      } else {
-        await connect(id);
       }
     });
   });
@@ -341,6 +376,7 @@
       ...rest,
     );
     renderControls();
+    schedulePrepare();
   }
 
   // Трек, поставленный следующим из самой очереди, не должен потом сыграть второй раз.
@@ -499,6 +535,60 @@
     listening = null;
   }
 
+  /* Заготовка следующего трека */
+
+  const nextTrack = () => upNext[0] ?? queue[upcomingIndex()] ?? null;
+  const isFresh = ({ at }) => Date.now() - at < PREPARED_LIFETIME;
+
+  async function prepareNext() {
+    const track = nextTrack();
+    if (!track || !currentStream) return;
+    const key = trackKey(track);
+    if (prepared?.key === key && isFresh(prepared)) return;
+
+    const request = playRequest;
+    try {
+      const stream = await music.stream(track.provider, track.id);
+      if (request !== playRequest || nextTrack() !== track) return;
+      prepared = { key, stream, at: Date.now() };
+      warmAudio.src = stream.url;
+      if (track.coverLarge) new Image().src = track.coverLarge;
+    } catch {
+      // Ссылка запросится как обычно, в момент переключения.
+    }
+  }
+
+  // Не откладывает уже назначенный запуск: иначе частые вызовы не дали бы ему случиться.
+  function schedulePrepare() {
+    if (prepareTimer !== 0) return;
+    prepareTimer = setTimeout(() => {
+      prepareTimer = 0;
+      prepareNext();
+    }, PREPARE_DELAY);
+  }
+
+  function takePrepared(track) {
+    const ready = prepared;
+    prepared = null;
+    return ready?.key === trackKey(track) && isFresh(ready) ? ready.stream : null;
+  }
+
+  function releaseWarmAudio() {
+    warmAudio.removeAttribute('src');
+    warmAudio.load();
+  }
+
+  function skipBroken(request) {
+    brokenInRow += 1;
+    if (brokenInRow >= MAX_BROKEN_IN_ROW) {
+      brokenInRow = 0;
+      return;
+    }
+    setTimeout(() => {
+      if (request === playRequest) playNext();
+    }, SKIP_BROKEN_AFTER);
+  }
+
   async function startTrack(track) {
     reportListen(false);
     playRequest += 1;
@@ -516,8 +606,7 @@
     updateMediaSession(track);
     document.dispatchEvent(new CustomEvent('quad:track'));
 
-    try {
-      const stream = await music.stream(track.provider, track.id);
+    const open = async (stream) => {
       if (request !== playRequest) return;
       currentStream = stream;
       if (stream.preview) renderNowPlaying(track, 'отрывок');
@@ -525,10 +614,24 @@
       audio.src = stream.url;
       await audio.play();
       listening = track;
+      brokenInRow = 0;
+      releaseWarmAudio();
+      schedulePrepare();
+    };
+    const ask = () => music.stream(track.provider, track.id);
+
+    try {
+      // Заготовленная ссылка могла устареть, тогда запрашивается свежая.
+      const ready = takePrepared(track);
+      await open(ready ?? await ask()).catch(async (error) => {
+        if (!ready || error.name === 'AbortError') throw error;
+        await open(await ask());
+      });
     } catch (error) {
       // AbortError значит, что пользователь уже включил другой трек.
       if (request === playRequest && error.name !== 'AbortError') {
         renderNowPlaying(track, 'не удалось включить');
+        skipBroken(request);
       }
     }
   }
@@ -590,6 +693,7 @@
     if (!Number.isFinite(audio.duration)) return;
     showProgress((audio.currentTime / audio.duration) * 100);
     time.textContent = formatTime(audio.currentTime);
+    if (audio.duration - audio.currentTime < PREPARE_BEFORE_END) schedulePrepare();
   });
   audio.addEventListener('play', renderControls);
   audio.addEventListener('pause', renderControls);
@@ -651,6 +755,7 @@
     queueIs: (list) => queue === list,
     renderArtistLinks,
     renderQueue,
+    services: () => accounts.filter((account) => account.connected),
     showToast,
     shuffled,
   };

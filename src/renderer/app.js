@@ -20,6 +20,7 @@ function showView(name, heading) {
   document.querySelector('.scroll').scrollTop = 0;
   document.body.classList.toggle('on-home', name === 'home' || name === 'wave');
   document.body.classList.toggle('on-wave', name === 'wave');
+  document.body.dataset.view = name;
 
   const isSearch = name === 'search';
   searchBox.hidden = !isSearch;

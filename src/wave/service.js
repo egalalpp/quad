@@ -1,12 +1,16 @@
 const { app } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { scopeOf } = require('../providers');
 const {
   MODES,
   artistKeys,
   buildProfile,
   dislikesOf,
+  favouriteNames,
   historyOf,
+  matchesFilters,
+  mentions,
   pickBatch,
   sessionOf,
   strongestArtist,
@@ -22,11 +26,17 @@ const FAMILIAR_TRACKS = 30;
 
 // С фильтром большая часть кандидатов отсеется, поэтому их нужно больше.
 const FILTERED_POOL_FACTOR = 5;
+const FILTERED_SEEDS_FACTOR = 2;
 
 // Что сейчас заходит: столько треков из последних дослушанных становятся отправными точками.
 const WARM_SEEDS = 3;
 const WARM_WINDOW = 3 * 24 * 60 * 60 * 1000;
 const TOP_GENRES = 8;
+
+// Пустой аккаунт: столько артистов с других сервисов ищутся здесь за одну партию.
+const BORROWED_POOL = 30;
+const BORROWED_ARTISTS = 3;
+const BORROWED_TRACKS = 6;
 
 const historyFile = () => path.join(app.getPath('userData'), 'wave-history.json');
 const dislikesFile = () => path.join(app.getPath('userData'), 'wave-dislikes.json');
@@ -113,6 +123,14 @@ async function tasteOf(provider) {
   return taste;
 }
 
+// Сервис, который сейчас не отвечает, выпадает из волны и не мешает остальным.
+async function tastesOf(providers) {
+  const results = await Promise.allSettled(providers.map(tasteOf));
+  return results.flatMap((result, index) => (
+    result.status === 'fulfilled' ? [{ provider: providers[index], taste: result.value }] : []
+  ));
+}
+
 // Чаще берёт начало списка: там самые свежие лайки.
 function sampleRecent(list, count) {
   const picked = new Set();
@@ -156,34 +174,67 @@ function settledTracks(results) {
   return results.filter((item) => item.status === 'fulfilled').flatMap((item) => item.value);
 }
 
-async function candidatesFrom(provider, taste, profile, history, { filters, now }) {
+const artistIds = (tracks) => [...new Set(tracks.flatMap((track) => track.artistList.map((artist) => artist.id)))];
+
+// Своих лайков нет, но вкус известен по другим сервисам: те же артисты ищутся здесь.
+// Искать не по кому или никого не нашлось: отправной точкой становится то, что советует сам сервис.
+async function startersFor(provider, others) {
+  const liked = others.flatMap(({ taste }) => taste.tracks);
+  const names = sampleRecent(favouriteNames(liked).slice(0, BORROWED_POOL), BORROWED_ARTISTS);
+  const found = settledTracks(await Promise.allSettled(names.map(async (name) => (
+    (await provider.search(name)).tracks
+      .filter((track) => mentions(track, name))
+      .slice(0, BORROWED_TRACKS)
+      .map((track) => ({ ...track, why: `Потому что любишь ${name}` }))
+  ))));
+  if (found.length > 0 || !provider.discover) return found;
+
+  const trending = await provider.discover().catch(() => []);
+  return trending.map((track) => ({ ...track, why: `Сейчас в тренде на ${provider.name}` }));
+}
+
+async function candidatesFrom({ provider, taste }, { history, now, profile, tasteList }, filters) {
   const filtered = Boolean(filters?.genre || filters?.era);
-  const inGenre = filters?.genre ? taste.tracks.filter((track) => track.genre === filters.genre) : [];
-  const seedList = inGenre.length > 0 ? inGenre : taste.tracks;
+  const widen = filtered ? FILTERED_SEEDS_FACTOR : 1;
 
-  // Фильтр по жанру: артисты берутся из лайков этого жанра, иначе соседи уведут в другую сторону.
-  const artistPool = inGenre.length > 0
-    ? [...new Set(inGenre.flatMap((track) => track.artistList.map((artist) => artist.id)))]
-    : favouriteArtists(profile, provider).slice(0, 20);
+  // Запрос уходит сразу: с фильтром эта выборка нужна ещё и как отправные точки.
+  const familiar = provider.randomTracks(FAMILIAR_TRACKS * (filtered ? FILTERED_POOL_FACTOR : 1)).catch(() => []);
 
-  const artists = sampleRecent(artistPool, SEED_ARTISTS);
+  const isEmpty = taste.tracks.length === 0;
+  const starters = isEmpty
+    ? await startersFor(provider, tasteList.filter((item) => item.provider !== provider))
+    : [];
+  const known = isEmpty ? starters : taste.tracks;
+
+  // С фильтром отправные точки только подходящие, иначе соседи уведут в другую сторону.
+  // Вкус хранит лишь свежую сотню лайков, поэтому смотрим ещё и случайную выборку из всех.
+  const matching = filtered
+    ? [...known, ...await familiar].filter((track) => matchesFilters(track, filters, now))
+    : [];
+  const seedList = matching.length > 0 ? matching : known;
+
+  const favourites = favouriteArtists(profile, provider).slice(0, 20);
+  const artistPool = matching.length === 0 && favourites.length > 0 ? favourites : artistIds(seedList);
+
+  const artists = sampleRecent(artistPool, SEED_ARTISTS * widen);
   const neighbours = await Promise.allSettled(artists.map((id) => provider.artistNeighbours(id)));
   const found = neighbours.filter((item) => item.status === 'fulfilled').map((item) => item.value);
 
   const neighbourIds = found.flatMap((item) => item.similarArtistIds);
   const seeds = [
     ...(filtered ? [] : warmSeeds(history, provider, now)),
-    ...sampleRecent(seedList, SEED_TRACKS),
+    ...sampleRecent(seedList, SEED_TRACKS * widen),
   ];
   const requests = [
     ...seeds.map((seed) => similarTo(provider, seed)),
     ...sampleRecent(neighbourIds, NEIGHBOUR_ARTISTS).map(async (id) => (
       (await provider.artistNeighbours(id)).popular.map((track) => ({ ...track, why: 'Рядом с твоими артистами' }))
     )),
-    provider.randomTracks(FAMILIAR_TRACKS * (filtered ? FILTERED_POOL_FACTOR : 1)),
+    familiar,
   ];
 
   return [
+    ...starters,
     ...found.flatMap((item) => item.popular),
     ...settledTracks(await Promise.allSettled(requests)),
   ];
@@ -209,26 +260,32 @@ async function candidatesFromSeed(provider, seed) {
 }
 
 function explain(track, profile, likedKeys) {
-  if (track.why) return track.why;
   if (likedKeys.has(trackKey(track))) return 'Из твоих лайков';
+  if (track.why) return track.why;
   return strongestArtist(track, profile) > 0 ? 'Твой артист' : 'Новое для тебя';
 }
 
-async function prepare(providers) {
+// Профиль строится только по выбранным сервисам: жанры у них свои и друг к другу не подходят.
+async function prepare(connected, chosen) {
   const [history, disliked, tasteList] = await Promise.all([
     loadEvents(),
     loadDislikes(),
-    Promise.all(providers.map(tasteOf)),
+    tastesOf(connected),
   ]);
+  const sources = tasteList.filter(({ provider }) => chosen.includes(provider));
+  if (chosen.length > 0 && sources.length === 0) throw new Error('Сервисы волны не ответили');
+
   const now = Date.now();
-  const likedTracks = tasteList.flatMap((taste) => taste.tracks);
+  const isChosen = ({ key }) => chosen.some((provider) => key.startsWith(`${provider.id}:`));
+  const likedTracks = sources.flatMap(({ taste }) => taste.tracks);
   return {
     history,
     disliked,
+    sources,
     tasteList,
     now,
-    likedKeys: new Set(tasteList.flatMap((taste) => taste.keys)),
-    profile: buildProfile(likedTracks, history, now, disliked),
+    likedKeys: new Set(tasteList.flatMap(({ taste }) => taste.keys)),
+    profile: buildProfile(likedTracks, history.filter(isChosen), now, disliked.filter(isChosen)),
   };
 }
 
@@ -245,41 +302,42 @@ function contextOf({ history, disliked, likedKeys, now }, mode, options) {
   };
 }
 
-async function next(providers, { mode, count, exclude, previousArtist, filters, seed }) {
-  const state = await prepare(providers);
-  const { history, profile, tasteList, now, likedKeys } = state;
+async function next(connected, { source, mode, count, exclude, previousArtist, filters, seed }) {
+  // Волна от трека идёт по его сервису, что бы ни было выбрано на экране.
+  const seedProvider = seed ? connected.find((provider) => provider.id === seed.provider) : null;
+  const state = await prepare(connected, seedProvider ? [seedProvider] : scopeOf(connected, source));
+  const { likedKeys, profile, sources } = state;
 
-  const seedProvider = seed ? providers.find((provider) => provider.id === seed.provider) : null;
   const pools = seedProvider
     ? [await candidatesFromSeed(seedProvider, seed)]
-    : await Promise.all(providers.map((provider, index) => (
-      candidatesFrom(provider, tasteList[index], profile, history, { filters, now })
-    )));
+    : await Promise.all(sources.map((item) => candidatesFrom(item, state, filters)));
 
-  const batch = pickBatch(pools.flat(), profile, contextOf(state, mode, {
+  const context = contextOf(state, mode, {
     exclude,
     previousArtist,
     filters: seedProvider ? null : filters,
     seed,
-  }), count);
+  });
+
+  const batch = pickBatch(pools.flat(), profile, context, count);
   return batch.map((track) => ({ ...track, why: explain(track, profile, likedKeys) }));
 }
 
 // После лайка волна сразу подкладывает похожие, не дожидаясь следующей партии.
-async function similar(providers, track, count, exclude) {
-  const provider = providers.find((item) => item.id === track.provider);
+async function similar(connected, track, count, exclude) {
+  const provider = connected.find((item) => item.id === track.provider);
   if (!provider) return [];
 
-  const state = await prepare(providers);
+  const state = await prepare(connected, [provider]);
   const pool = await similarTo(provider, track);
   return pickBatch(pool, state.profile, contextOf(state, 'mix', { exclude }), count);
 }
 
 // Жанры, которые реально слушают: из них собирается фильтр на экране волны.
-async function topGenres(providers) {
-  const { profile } = await prepare(providers);
+// Отрицательный вес не повод прятать жанр: серия пропусков утягивает в минус и самые любимые.
+async function topGenres(connected, source) {
+  const { profile } = await prepare(connected, scopeOf(connected, source));
   return [...profile.genres]
-    .filter(([, weight]) => weight > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, TOP_GENRES)
     .map(([genre]) => genre);

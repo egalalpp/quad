@@ -1008,7 +1008,7 @@ body.page-open .line-handle {
 
 .wave-tune {
   position: absolute;
-  bottom: calc(var(--edge) + 54px);
+  bottom: calc(var(--edge) + 86px);
   left: 50%;
   display: grid;
   gap: 8px;

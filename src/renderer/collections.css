@@ -771,3 +771,114 @@ body:has(.search:focus) .line-top {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* Переключатель сервисов */
+
+.source-switch {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.source-switch[hidden] {
+  display: none;
+}
+
+.source-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  transition: transform 460ms var(--ease), width 460ms var(--ease), opacity 260ms ease;
+}
+
+.source-marker.is-placed {
+  opacity: 1;
+}
+
+.source-option {
+  position: relative;
+  padding: 5px 13px;
+  border-radius: 14px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: color 220ms;
+}
+
+.source-option:hover,
+.source-option.is-active {
+  color: #fff;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.head h1,
+.head .search-box {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Свой переключатель виден только на своём экране */
+
+#search-sources,
+#library-sources {
+  display: none;
+  animation: row-in 520ms var(--ease) backwards;
+}
+
+[data-view="search"] #search-sources:not([hidden]),
+[data-view="library"] #library-sources:not([hidden]) {
+  display: inline-flex;
+}
+
+.search-results {
+  transition: opacity 200ms ease;
+}
+
+.search-results.is-updating {
+  opacity: 0.35;
+}
+
+.wave-sources {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(var(--edge) + 50px);
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.wave-view.is-ready .wave-sources {
+  opacity: 1;
+}
+
+/* В узком окне поле поиска важнее подсказки и отступов */
+
+@media (max-width: 1000px) {
+  .head .hint {
+    display: none;
+  }
+
+  .head .source-option {
+    padding: 5px 9px;
+  }
+}
+
+/* В самом низком окне объяснение уступает место переключателю */
+
+@media (max-height: 540px) {
+  .wave-why {
+    display: none;
+  }
+}
