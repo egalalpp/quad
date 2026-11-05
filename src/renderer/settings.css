@@ -1,0 +1,731 @@
+/* Лайк и плюс */
+
+.track-action {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms, background-color 160ms, transform 260ms cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+
+.track-action[hidden] {
+  display: none;
+}
+
+.track-action:hover {
+  color: #fff;
+  background: var(--hover);
+}
+
+.track-action:active {
+  transform: scale(0.86);
+}
+
+.track-action:focus-visible {
+  outline: 0;
+  background: var(--hover);
+}
+
+.track-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+.track-action.is-busy svg {
+  animation: save-pulse 800ms ease-in-out infinite alternate;
+}
+
+.track-action.is-done {
+  color: var(--accent);
+}
+
+/* Скачано: значок растворяется, на его месте прорисовывается галочка. */
+.download-button {
+  position: relative;
+}
+
+.download-icon {
+  transition: opacity 180ms ease, transform 260ms ease;
+}
+
+.download-button.is-done .download-icon {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.track-action .download-check {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  stroke-width: 0.75;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.download-check path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.download-button.is-done .download-check {
+  opacity: 1;
+}
+
+.download-button.is-done .download-check path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 420ms var(--ease) 120ms;
+}
+
+.track-action.is-failed {
+  color: #ff6b6b;
+}
+
+@keyframes save-pulse {
+  from {
+    opacity: 0.3;
+    transform: translateY(-1px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(1px);
+  }
+}
+
+.folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.folder-path {
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  user-select: text;
+}
+
+.like-button.is-liked {
+  color: var(--accent);
+}
+
+.like-button.is-liked svg {
+  fill: currentColor;
+  animation: like-pop 420ms cubic-bezier(0.2, 1.6, 0.3, 1);
+}
+
+@keyframes like-pop {
+  from {
+    transform: scale(0.5);
+  }
+}
+
+.now-actions {
+  display: flex;
+  align-items: center;
+}
+
+/* Блок шире своей колонки и заходит под центральные кнопки плеера. */
+.track {
+  position: relative;
+  z-index: 1;
+}
+
+.track.has-cover {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.track.has-cover .now-cover {
+  grid-area: 1 / 1 / 3 / 2;
+}
+
+.track.has-cover .now-title {
+  grid-area: 1 / 2;
+  align-self: end;
+}
+
+.track.has-cover .now-artist {
+  grid-area: 2 / 2;
+  align-self: start;
+}
+
+.track.has-cover .now-actions {
+  grid-area: 1 / 3 / 3 / 4;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Меню плейлистов */
+
+.playlist-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  width: 230px;
+  max-height: 300px;
+  padding: 8px;
+  overflow-y: auto;
+  border-radius: 12px;
+  background: #161616;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
+  animation: row-in 220ms var(--ease);
+}
+
+.playlist-menu[hidden] {
+  display: none;
+}
+
+.playlist-menu-list {
+  display: grid;
+  gap: 2px;
+}
+
+.playlist-menu-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 9px;
+  overflow: hidden;
+  border-radius: 7px;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 140ms;
+}
+
+.playlist-menu-item:hover {
+  background: var(--hover);
+}
+
+.playlist-menu-item.is-added::after {
+  content: "✓";
+  color: var(--muted);
+}
+
+.text-field {
+  width: 100%;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.07);
+  user-select: text;
+}
+
+.text-field:focus-visible {
+  outline: 1px solid var(--muted);
+  outline-offset: 0;
+}
+
+.text-field::placeholder {
+  color: var(--muted);
+}
+
+/* Настройки */
+
+.settings {
+  display: grid;
+  gap: 38px;
+  max-width: 860px;
+  animation: row-in 520ms var(--ease) backwards;
+}
+
+.setting-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.setting-title {
+  font: inherit;
+  font-size: 18px;
+  font-weight: 300;
+  color: #fff;
+}
+
+.toggle {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  transition: background-color 200ms;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 260ms cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+
+.toggle.is-on {
+  background: rgba(var(--accent-rgb), 0.55);
+}
+
+.toggle.is-on::after {
+  transform: translateX(14px);
+}
+
+.eq-curve {
+  display: block;
+  width: 100%;
+  cursor: ns-resize;
+  touch-action: none;
+  transition: opacity 240ms;
+}
+
+.eq-curve.is-off {
+  opacity: 0.4;
+}
+
+.eq-zero {
+  stroke: var(--line);
+  stroke-dasharray: 2 6;
+}
+
+.eq-line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.45));
+}
+
+.eq-knob {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.eq-label {
+  font-size: 12px;
+  fill: var(--muted);
+  stroke: none;
+  text-anchor: middle;
+}
+
+.eq-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.eq-presets .is-active,
+.look .recent-chip.is-active {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+/* Внешний вид */
+
+.look-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 42px;
+}
+
+.look-label {
+  color: var(--muted);
+}
+
+.look-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.look-swatch {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform 280ms cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+
+.look-swatch:hover {
+  transform: scale(1.14);
+}
+
+.look-swatch::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  transition: border-color 200ms ease;
+}
+
+.look-swatch.is-active::after {
+  border-color: rgba(255, 255, 255, 0.75);
+}
+
+.look-range,
+.look-hue {
+  height: 18px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.look-range {
+  --value: 50%;
+  width: min(100%, 300px);
+}
+
+.look-hue {
+  width: 170px;
+  margin-left: 10px;
+}
+
+.look-range::-webkit-slider-runnable-track {
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent) var(--value), var(--line) var(--value));
+}
+
+.look-hue::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, hsl(0 85% 74%), hsl(60 85% 74%), hsl(120 85% 74%), hsl(180 85% 74%), hsl(240 85% 74%), hsl(300 85% 74%), hsl(360 85% 74%));
+}
+
+.look-range::-webkit-slider-thumb,
+.look-hue::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.7);
+  transition: transform 160ms;
+}
+
+.look-range::-webkit-slider-thumb {
+  margin-top: -5px;
+}
+
+.look-hue::-webkit-slider-thumb {
+  margin-top: -4px;
+}
+
+.look-range:hover::-webkit-slider-thumb,
+.look-hue:hover::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+
+@container view (max-width: 620px) {
+  .look-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    padding: 6px 0;
+  }
+}
+
+.device-list {
+  display: grid;
+  gap: 2px;
+  margin: 0 -10px;
+}
+
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  text-align: left;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms, background-color 160ms;
+}
+
+.device-row::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+
+.device-row:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.device-row.is-active {
+  color: #fff;
+}
+
+.device-row.is-active::before {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.playlist-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.playlist-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.playlist-open {
+  overflow: hidden;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 160ms;
+}
+
+.playlist-open:hover {
+  color: #fff;
+}
+
+/* Кнопка волны в меню */
+
+.nav-wave {
+  margin-top: 26px;
+  color: var(--text);
+}
+
+.nav-wave::before {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: 0;
+  width: 64px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent);
+}
+
+/* Экран волны */
+
+.wave-view {
+  --cover-size: 200px;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.wave-view.is-active {
+  animation: home-in 700ms ease both;
+}
+
+.wave-view.is-active.is-resumed {
+  animation: none;
+}
+
+/* Свечение на ударах баса. Лежит под сценой, поэтому обложку и текст не двигает. */
+.wave-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--center-x) var(--center-y), rgba(var(--accent-rgb), 0.1), transparent 55%);
+  opacity: var(--kick, 0);
+  pointer-events: none;
+}
+
+.intro-active .wave-view {
+  visibility: hidden;
+}
+
+.on-wave .line:not(.line-bottom) {
+  opacity: 0;
+}
+
+.wave-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Над рамкой с запасом: при вращении её углы выходят за половину стороны примерно в 1,24 раза. */
+.wave-heading {
+  position: absolute;
+  top: max(44px, calc(var(--center-y) - var(--half) * 1.28));
+  left: var(--center-x);
+  font-size: clamp(22px, 2.6vw, 38px);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: #fff;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -100%);
+  transition: opacity 700ms ease;
+}
+
+.wave-view.is-ready .wave-heading {
+  opacity: 1;
+}
+
+.wave-center {
+  position: absolute;
+  top: var(--center-y);
+  left: var(--center-x);
+  display: grid;
+  justify-items: center;
+  width: calc(var(--cover-size) * 1.5);
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 600ms ease;
+}
+
+.wave-view.is-ready.has-track .wave-center {
+  opacity: 1;
+}
+
+.wave-center.is-changing .wave-cover {
+  animation: wave-cover-in 900ms cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+.wave-center.is-changing .wave-title,
+.wave-center.is-changing .wave-artists {
+  animation: home-rise 800ms cubic-bezier(0.2, 0.9, 0.2, 1) 120ms backwards;
+}
+
+@keyframes wave-cover-in {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: scale(0.9);
+  }
+}
+
+.wave-cover {
+  width: var(--cover-size);
+  height: var(--cover-size);
+  object-fit: cover;
+  border-radius: calc(12px * var(--round));
+  background: var(--hover);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 360ms cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+
+.wave-cover:hover {
+  transform: scale(1.03);
+}
+
+.wave-title {
+  max-width: 100%;
+  margin-top: 18px;
+  overflow: hidden;
+  font-size: clamp(17px, 1.6vw, 24px);
+  font-weight: 350;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wave-artists {
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.62);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wave-start {
+  position: absolute;
+  top: var(--center-y);
+  left: var(--center-x);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 500ms ease, box-shadow 280ms ease;
+}
+
+.wave-start:hover,
+.wave-start:active {
+  transform: translate(-50%, -50%);
+}
+
+.wave-view.is-ready:not(.has-track) .wave-start {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.wave-modes {
+  position: absolute;
+  bottom: calc(var(--edge) + 18px);
+  left: 50%;
+  justify-content: center;
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.home-modes {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.home-mode {
+  padding: 3px 11px;
+  border-radius: 13px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: color 160ms, background-color 160ms;
+}
+
+.home-mode:hover {
+  color: #fff;
+}
+
+.home-mode.is-active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.wave-loading .wave-start {
+  animation: wave-pulse 1100ms ease-in-out infinite alternate;
+}
+
+@keyframes wave-pulse {
+  from {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
+  }
+  to {
+    box-shadow: 0 0 34px rgba(255, 255, 255, 0.55);
+  }
+}

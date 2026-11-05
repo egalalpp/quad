@@ -1,0 +1,80 @@
+{
+  "name": "quad",
+  "version": "0.1.0",
+  "description": "Quad: вся музыка в одном плеере",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . Quad --platform=win32 --arch=x64 --icon=assets/icon.ico --out=dist --overwrite --asar --ignore=^/dist --ignore=^/release --ignore=^/.cache --ignore=^/scripts --ignore=^/video --ignore=^/test --win32metadata.FileDescription=Quad --win32metadata.ProductName=Quad --win32metadata.CompanyName=Quad",
+    "test": "node --test",
+    "dist:win": "npm run package && electron-builder --win nsis --prepackaged dist/Quad-win32-x64",
+    "dist:mac": "electron-builder --mac",
+    "dist:mac-on-windows": "npm run package && node scripts/build-mac.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/unbounded": "^5.3.0"
+  },
+  "productName": "Quad",
+  "build": {
+    "appId": "com.quad.player",
+    "productName": "Quad",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Quad",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "uninstallerSidebar": "assets/installer-sidebar.bmp",
+      "installerHeader": "assets/installer-header.bmp",
+      "language": "1049",
+      "installerLanguages": [
+        "ru_RU"
+      ],
+      "multiLanguageInstaller": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Quad-Setup-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.music",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "artifactName": "Quad-${version}-mac-${arch}.${ext}"
+    }
+  }
+}

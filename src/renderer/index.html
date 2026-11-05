@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://avatars.yandex.net; media-src https://*.yandex.net">
+  <title>Quad</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="intro.css">
+  <link rel="stylesheet" href="track-page.css">
+  <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="collections.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body class="on-home">
+  <canvas class="app-ambient" id="app-ambient" width="192" height="192"></canvas>
+
+  <section class="view home is-active" id="view-home" aria-label="Главная">
+    <div class="home-wall" id="home-wall"></div>
+    <div class="home-shade"></div>
+    <div class="home-hero">
+      <h1 class="home-title" id="home-title"></h1>
+      <p class="home-stats" id="home-stats"></p>
+      <div class="home-actions">
+        <button class="home-action home-action-main" id="home-second" data-target="accounts">Подключить аккаунт</button>
+        <button class="home-action home-action-ghost home-mix" id="home-mix" hidden>
+          <svg viewBox="0 0 16 16"><path d="M2 4.5h2c1.3 0 2.2.6 2.9 1.7l2.2 3.6c.7 1.1 1.6 1.7 2.9 1.7h2M2 11.5h2c1.2 0 2-.5 2.7-1.4M9.3 5.9c.7-.9 1.5-1.4 2.7-1.4h2M12.5 2.7 14.3 4.5l-1.8 1.8M12.5 9.7l1.8 1.8-1.8 1.8"/></svg>
+          <span>Миксануть</span>
+        </button>
+      </div>
+    </div>
+    <p class="home-caption" id="home-caption"></p>
+  </section>
+
+  <section class="view wave-view" id="view-wave" aria-label="Моя волна">
+    <canvas class="wave-canvas" id="wave-canvas"></canvas>
+    <h1 class="wave-heading">Моя волна</h1>
+    <div class="wave-center" id="wave-center">
+      <img class="wave-cover" id="wave-cover" alt="">
+      <p class="wave-title" id="wave-title"></p>
+      <p class="wave-artists" id="wave-artists"></p>
+    </div>
+    <button class="home-action home-action-main wave-start" id="wave-start">Запустить волну</button>
+    <div class="home-modes wave-modes" aria-label="Настроение волны">
+      <button class="home-mode" data-wave-mode="familiar">Любимое</button>
+      <button class="home-mode" data-wave-mode="mix">Микс</button>
+      <button class="home-mode" data-wave-mode="discover">Новое</button>
+    </div>
+  </section>
+
+  <div class="drag"></div>
+
+  <div class="window-controls">
+    <button id="win-min" aria-label="Свернуть">
+      <svg viewBox="0 0 12 12"><path d="M2.5 6h7"/></svg>
+    </button>
+    <button id="win-max" aria-label="Развернуть">
+      <svg class="icon-maximize" viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1.5"/></svg>
+      <svg class="icon-restore" viewBox="0 0 12 12"><rect x="2" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 2H8.5A1.5 1.5 0 0 1 10 3.5V7.5"/></svg>
+    </button>
+    <button id="win-close" aria-label="Закрыть">
+      <svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+    </button>
+  </div>
+
+  <section class="intro" id="intro" aria-label="Добро пожаловать в Quad" hidden>
+    <canvas id="intro-canvas"></canvas>
+
+    <svg class="wordmark" viewBox="-1 -8 126 48" role="img" aria-label="quad">
+      <circle pathLength="1" cx="12" cy="16" r="11"/>
+      <path pathLength="1" d="M23 5V39"/>
+      <path pathLength="1" d="M35 5V17a10 10 0 0 0 20 0V5"/>
+      <path pathLength="1" d="M55 5V27"/>
+      <circle pathLength="1" cx="78" cy="16" r="11"/>
+      <path pathLength="1" d="M89 5V27"/>
+      <circle pathLength="1" cx="112" cy="16" r="11"/>
+      <path pathLength="1" d="M123 -7V27"/>
+    </svg>
+
+    <div class="connect" id="connect">
+      <h2 class="connect-title">Подключите аккаунт</h2>
+
+      <div class="services">
+        <button class="service" data-service="Spotify">
+          <svg viewBox="0 0 24 24"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+          <span>Spotify</span>
+        </button>
+        <button class="service" data-service="Apple Music">
+          <svg viewBox="0 0 24 24"><path d="M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.801.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03a12.5 12.5 0 001.57-.1c.822-.106 1.596-.35 2.295-.81a5.046 5.046 0 001.88-2.207c.186-.42.293-.87.37-1.324.113-.675.138-1.358.137-2.04-.002-3.8 0-7.595-.003-11.393zm-6.423 3.99v5.712c0 .417-.058.827-.244 1.206-.29.59-.76.962-1.388 1.14-.35.1-.706.157-1.07.173-.95.045-1.773-.6-1.943-1.536a1.88 1.88 0 011.038-2.022c.323-.16.67-.25 1.018-.324.378-.082.758-.153 1.134-.24.274-.063.457-.23.51-.516a.904.904 0 00.02-.193c0-1.815 0-3.63-.002-5.443a.725.725 0 00-.026-.185c-.04-.15-.15-.243-.304-.234-.16.01-.318.035-.475.066-.76.15-1.52.303-2.28.456l-2.325.47-1.374.278c-.016.003-.032.01-.048.013-.277.077-.377.203-.39.49-.002.042 0 .086 0 .13-.002 2.602 0 5.204-.003 7.805 0 .42-.047.836-.215 1.227-.278.64-.77 1.04-1.434 1.233-.35.1-.71.16-1.075.172-.96.036-1.755-.6-1.92-1.544-.14-.812.23-1.685 1.154-2.075.357-.15.73-.232 1.108-.31.287-.06.575-.116.86-.177.383-.083.583-.323.6-.714v-.15c0-2.96 0-5.922.002-8.882 0-.123.013-.25.042-.37.07-.285.273-.448.546-.518.255-.066.515-.112.774-.165.733-.15 1.466-.296 2.2-.444l2.27-.46c.67-.134 1.34-.27 2.01-.403.22-.043.442-.088.663-.106.31-.025.523.17.554.482.008.073.012.148.012.223.002 1.91.002 3.822 0 5.732z"/></svg>
+          <span>Apple Music</span>
+        </button>
+        <button class="service" data-service="Яндекс Музыки" data-provider="yandex">
+          <svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 0a12 12 0 1 0 0 24 12 12 0 0 0 0-24zM16.2 5.5H11.8c-3 0-4.8 1.6-4.8 4.1 0 1.9.9 3.1 2.6 3.7L6.8 18.5h2.3l2.6-4.8H14v4.8h2.2zM14 7.4v4.5h-2c-1.7 0-2.8-.7-2.8-2.3 0-1.5 1-2.2 2.8-2.2z"/></svg>
+          <span>Яндекс Музыка</span>
+        </button>
+        <button class="service" data-service="YouTube Music">
+          <svg viewBox="0 0 24 24"><path d="M12 0C5.376 0 0 5.376 0 12s5.376 12 12 12 12-5.376 12-12S18.624 0 12 0zm0 19.104c-3.924 0-7.104-3.18-7.104-7.104S8.076 4.896 12 4.896s7.104 3.18 7.104 7.104-3.18 7.104-7.104 7.104zm0-13.332c-3.432 0-6.228 2.796-6.228 6.228S8.568 18.228 12 18.228s6.228-2.796 6.228-6.228S15.432 5.772 12 5.772zM9.684 15.54V8.46L15.816 12l-6.132 3.54z"/></svg>
+          <span>YouTube Music</span>
+        </button>
+        <button class="service" data-service="файлов">
+          <svg viewBox="0 0 24 24"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h4.6l2.4 2.5h8A2.5 2.5 0 0 1 22 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17.5z"/></svg>
+          <span>Файлы</span>
+        </button>
+      </div>
+
+      <div class="connect-foot">
+        <p class="connect-note" id="connect-note" aria-live="polite"></p>
+        <button class="later" id="intro-later">Позже</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="app">
+    <header class="head">
+      <div class="search-box" id="search-box">
+        <input class="search" id="search" type="text" placeholder="Поиск" aria-label="Поиск музыки" spellcheck="false" autocomplete="off">
+        <span class="hint">Ctrl K</span>
+      </div>
+      <h1 id="title" hidden></h1>
+    </header>
+
+    <nav class="nav" id="nav" aria-label="Разделы">
+      <span class="nav-glow"></span>
+      <span class="nav-marker"></span>
+
+      <button class="nav-item is-active" data-view="home" data-title="Главная">
+        <svg class="nav-icon" viewBox="0 0 18 18">
+          <path pathLength="1" d="M5.5 3h7"/>
+          <path pathLength="1" d="M15 5.5v7"/>
+          <path pathLength="1" d="M12.5 15h-7"/>
+          <path pathLength="1" d="M3 12.5v-7"/>
+        </svg>
+        <span>Главная</span>
+      </button>
+
+      <button class="nav-item" data-view="search" data-title="Поиск">
+        <svg class="nav-icon" viewBox="0 0 18 18">
+          <circle pathLength="1" cx="8" cy="8" r="5.25"/>
+          <path pathLength="1" d="M12 12l3.5 3.5"/>
+        </svg>
+        <span>Поиск</span>
+      </button>
+
+      <button class="nav-item" data-view="library" data-title="Медиатека">
+        <svg class="nav-icon" viewBox="0 0 18 18">
+          <path pathLength="1" d="M3.5 3v12"/>
+          <path pathLength="1" d="M7.5 3v12"/>
+          <path pathLength="1" d="M11 3.4l3.6 11.4"/>
+        </svg>
+        <span>Медиатека</span>
+      </button>
+
+      <button class="nav-item" data-view="settings" data-title="Настройки">
+        <svg class="nav-icon" viewBox="0 0 18 18">
+          <path pathLength="1" d="M3 5.5h12"/>
+          <path pathLength="1" d="M3 12.5h12"/>
+          <circle pathLength="1" cx="11.5" cy="5.5" r="1.75"/>
+          <circle pathLength="1" cx="6.5" cy="12.5" r="1.75"/>
+        </svg>
+        <span>Настройки</span>
+      </button>
+
+      <button class="nav-item nav-wave" data-view="wave" data-title="Моя волна">
+        <svg class="nav-icon" viewBox="0 0 18 18">
+          <path pathLength="1" d="M2 9c1.7-5.5 3.3-5.5 5 0s3.3 5.5 5 0 2.4-4 4-2"/>
+        </svg>
+        <span>Моя волна</span>
+      </button>
+
+      <button class="nav-item nav-account" data-view="accounts" data-title="Аккаунты">
+        <span class="nav-avatar" id="nav-avatar">
+          <svg class="nav-icon" viewBox="0 0 18 18">
+            <circle pathLength="1" cx="9" cy="6.25" r="3.25"/>
+            <path pathLength="1" d="M3 15.5c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5"/>
+          </svg>
+          <span class="nav-initial" id="nav-initial"></span>
+        </span>
+        <span class="nav-account-text">
+          <span class="nav-account-name" id="nav-account-name">Аккаунты</span>
+          <span class="nav-account-note" id="nav-account-note"></span>
+        </span>
+      </button>
+    </nav>
+
+    <main class="stage">
+      <span class="line line-top"></span>
+      <span class="line line-left"></span>
+      <span class="line line-right"></span>
+      <span class="line line-bottom"><span class="progress-fill"></span></span>
+      <span class="line-handle handle-left" data-side="nav" data-tip="Потяни, двойной клик вернёт как было"></span>
+      <span class="line-handle handle-right" data-side="queue" data-tip="Потяни, двойной клик вернёт как было"></span>
+      <div class="seek" id="seek"><span class="seek-dot" id="seek-dot" hidden></span></div>
+
+      <div class="scroll">
+        <section class="view view-center" id="view-search">
+          <div class="search-idle" id="search-idle">
+            <h2 class="search-idle-title" id="search-idle-title">Подключи аккаунт, чтобы искать музыку</h2>
+            <div class="search-recent" id="search-recent"></div>
+          </div>
+          <div class="search-results" id="search-results" hidden></div>
+        </section>
+
+        <section class="view" id="view-settings">
+          <div class="settings">
+            <section class="look" id="look"></section>
+
+            <section>
+              <div class="setting-head">
+                <h2 class="setting-title">Эквалайзер</h2>
+                <button class="toggle" id="eq-toggle" role="switch" aria-label="Эквалайзер"></button>
+              </div>
+              <svg class="eq-curve" id="eq-curve" viewBox="0 0 800 220" role="img" aria-label="Кривая эквалайзера"></svg>
+              <div class="eq-presets" id="eq-presets"></div>
+            </section>
+
+            <section>
+              <div class="setting-head"><h2 class="setting-title">Устройство вывода</h2></div>
+              <div class="device-list" id="devices"></div>
+            </section>
+
+            <section>
+              <div class="setting-head"><h2 class="setting-title">Папка для музыки</h2></div>
+              <div class="folder-row">
+                <span class="folder-path" id="download-folder"></span>
+                <button class="row-action" id="download-open">Открыть</button>
+                <button class="row-action" id="download-choose">Изменить</button>
+              </div>
+            </section>
+
+            <section>
+              <div class="setting-head"><h2 class="setting-title">Мои плейлисты</h2></div>
+              <form id="playlist-form">
+                <input class="text-field" id="playlist-input" type="text" placeholder="Название нового плейлиста" autocomplete="off" spellcheck="false">
+              </form>
+              <div class="playlist-list" id="playlist-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-entity">
+          <div id="entity-page"></div>
+        </section>
+
+        <section class="view view-center" id="view-library">
+          <p class="muted" id="library-message">Загрузка</p>
+          <div id="library-page" hidden></div>
+        </section>
+
+        <section class="view" id="view-accounts">
+          <ul class="rows">
+            <li><span>Spotify</span><span class="status">не подключено</span></li>
+            <li><span>Apple Music</span><span class="status">не подключено</span></li>
+            <li>
+              <span>Яндекс Музыка</span>
+              <span class="row-end">
+                <span class="status" data-account-status="yandex">не подключено</span>
+                <button class="row-action" data-account-action="yandex">Подключить</button>
+              </span>
+            </li>
+            <li><span>YouTube Music</span><span class="status">не подключено</span></li>
+            <li><span>Локальные файлы</span><span class="status">не подключено</span></li>
+          </ul>
+          <button class="link" id="replay-intro">Показать заставку</button>
+        </section>
+      </div>
+    </main>
+
+    <aside class="queue" aria-label="Очередь">
+      <p class="queue-title-main">Очередь</p>
+      <p class="muted" id="queue-empty">Пусто</p>
+      <ol class="queue-list" id="queue-list"></ol>
+    </aside>
+
+    <footer class="player">
+      <div class="track" id="now-track">
+        <button class="now-cover" id="now-cover" aria-label="Открыть страницу трека" hidden>
+          <img id="now-cover-image" alt="">
+        </button>
+        <span class="now-title muted" id="now-title">Ничего не играет</span>
+        <span class="now-artist muted" id="now-artist"></span>
+        <div class="now-actions">
+          <button class="track-action like-button" data-like hidden>
+            <svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>
+          </button>
+          <button class="track-action" data-add-playlist aria-label="Добавить в плейлист" hidden>
+            <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
+          </button>
+          <button class="track-action download-button" data-download aria-label="Сохранить в папку" hidden><svg class="download-icon" viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9"/></svg><svg class="download-check" viewBox="0 0 10 10"><path pathLength="1" d="M2 5.3 4.2 7.5 8 3"/></svg></button>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="icon" id="btn-prev" aria-label="Предыдущий трек" disabled>
+          <svg viewBox="0 0 16 16"><path d="M12 3.5v9L5.5 8zM3.5 3.5v9"/></svg>
+        </button>
+        <button class="icon icon-play" id="btn-play" aria-label="Играть" disabled>
+          <svg class="icon-start" viewBox="0 0 16 16"><path d="M5 3v10l8-5z"/></svg>
+          <svg class="icon-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>
+        </button>
+        <button class="icon" id="btn-next" aria-label="Следующий трек" disabled>
+          <svg viewBox="0 0 16 16"><path d="M4 3.5v9L10.5 8zM12.5 3.5v9"/></svg>
+        </button>
+      </div>
+
+      <div class="side">
+        <span class="muted time" id="time">0:00</span>
+        <input class="volume" id="volume" type="range" min="0" max="100" value="70" aria-label="Громкость">
+      </div>
+    </footer>
+  </div>
+
+  <section class="track-page" id="track-page" aria-label="Страница трека" hidden>
+    <div class="page-backdrop">
+      <canvas class="page-ambient" id="page-ambient" width="192" height="192"></canvas>
+    </div>
+
+    <button class="page-close" id="page-close" aria-label="Закрыть страницу трека">
+      <svg viewBox="0 0 14 14"><path d="M3 5l4 4 4-4"/></svg>
+    </button>
+
+    <div class="page-info" id="page-info">
+      <div class="page-cover-frame" id="page-cover-frame">
+        <span class="frame-line frame-top"></span>
+        <span class="frame-line frame-right"></span>
+        <span class="frame-line frame-bottom"></span>
+        <span class="frame-line frame-left"></span>
+        <img class="page-cover" id="page-cover" alt="">
+      </div>
+      <div class="page-text" id="page-text">
+      <div class="page-title-row">
+        <h1 class="page-title" id="page-title"></h1>
+        <button class="track-action like-button" data-like hidden>
+          <svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>
+        </button>
+        <button class="track-action" data-add-playlist aria-label="Добавить в плейлист" hidden>
+          <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
+        </button>
+        <button class="track-action download-button" data-download aria-label="Сохранить в папку" hidden><svg class="download-icon" viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9"/></svg><svg class="download-check" viewBox="0 0 10 10"><path pathLength="1" d="M2 5.3 4.2 7.5 8 3"/></svg></button>
+      </div>
+      <p class="page-artists" id="page-artists"></p>
+      <dl class="page-details" id="page-details"></dl>
+      </div>
+    </div>
+
+    <div class="page-divider" id="page-divider" data-tip="Потяни, двойной клик вернёт как было"><span></span></div>
+
+    <div class="page-lyrics-box" id="page-lyrics-box">
+      <div class="page-lyrics" id="page-lyrics"></div>
+    </div>
+  </section>
+
+  <p class="toast" id="toast" aria-live="polite"></p>
+  <p class="tip" id="tip" aria-hidden="true"></p>
+
+  <div class="playlist-menu" id="playlist-menu" hidden>
+    <div class="playlist-menu-list" id="playlist-menu-list"></div>
+    <form id="playlist-menu-form">
+      <input class="text-field" id="playlist-menu-input" type="text" placeholder="Новый плейлист" autocomplete="off" spellcheck="false">
+    </form>
+  </div>
+
+  <template id="row-play-icon">
+    <svg class="row-play" viewBox="0 0 16 16"><path d="M5 3v10l8-5z"/></svg>
+  </template>
+
+  <template id="collection-template">
+    <div class="collection-page">
+      <aside class="collection-hero">
+        <div class="hero-cover-frame">
+          <span class="frame-line frame-top"></span>
+          <span class="frame-line frame-right"></span>
+          <span class="frame-line frame-bottom"></span>
+          <span class="frame-line frame-left"></span>
+          <img class="hero-glow" alt="">
+          <div class="hero-cover"></div>
+        </div>
+        <h2 class="hero-title"></h2>
+        <p class="hero-subtitle"></p>
+        <div class="hero-actions">
+          <button class="home-action home-action-main hero-play">Слушать</button>
+          <button class="home-action home-action-ghost hero-shuffle">Перемешать</button>
+        </div>
+        <div class="hero-extras"></div>
+      </aside>
+      <div class="collection-main">
+        <div class="collection-top"></div>
+        <ol class="tracks"></ol>
+      </div>
+    </div>
+  </template>
+
+  <template id="plus-icon">
+    <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
+  </template>
+
+  <template id="cross-icon">
+    <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+  </template>
+
+  <template id="next-icon">
+    <svg viewBox="0 0 16 16"><path d="M2.5 4h11M2.5 8h6M2.5 12h6"/><path d="M11 8.7v5l3.5-2.5z"/></svg>
+  </template>
+
+  <template id="download-icon">
+    <svg viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3.5 13.5h9"/></svg>
+  </template>
+
+  <template id="heart-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></svg>
+  </template>
+
+  <script src="app.js"></script>
+  <script src="music.js"></script>
+  <script src="strings-scene.js"></script>
+  <script src="track-list.js"></script>
+  <script src="entity.js"></script>
+  <script src="library.js"></script>
+  <script src="search.js"></script>
+  <script src="wave.js"></script>
+  <script src="mix.js"></script>
+  <script src="likes.js"></script>
+  <script src="playlist-menu.js"></script>
+  <script src="downloads.js"></script>
+  <script src="layout.js"></script>
+  <script src="appearance.js"></script>
+  <script src="settings.js"></script>
+  <script src="wave-view.js"></script>
+  <script src="home.js"></script>
+  <script src="track-page.js"></script>
+  <script src="intro.js"></script>
+</body>
+</html>

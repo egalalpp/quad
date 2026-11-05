@@ -1,0 +1,1032 @@
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("../../node_modules/@fontsource-variable/inter/files/inter-cyrillic-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #000;
+  --text: #e8e8e8;
+  --muted: #777;
+  --line: rgba(255, 255, 255, 0.16);
+  --hover: rgba(255, 255, 255, 0.06);
+  --nav-w: 184px;
+  --queue-w: 184px;
+  --accent: rgb(255, 255, 255);
+  --accent-rgb: 255, 255, 255;
+  --on-accent: #000;
+  --round: 1;
+  --row-pad: 6px;
+  --row-cover: 40px;
+  --glow: 0.1;
+  --shade: 1;
+  --lyrics-size: 1;
+  --lyrics-font: "Unbounded Variable", "Inter Variable", serif;
+  --edge: 88px;
+  --gap: 36px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 350 14px/1.5 "Inter Variable", sans-serif;
+  user-select: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  outline: 0;
+}
+
+h1 {
+  font: inherit;
+}
+
+ul {
+  list-style: none;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
+svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+::selection {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+:focus-visible {
+  outline: 1px solid var(--muted);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* Окно */
+
+.drag {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
+.window-controls {
+  position: fixed;
+  top: 10px;
+  right: 12px;
+  z-index: 20;
+  display: flex;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
+  transition: color 160ms, background-color 160ms;
+}
+
+.window-controls button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.window-controls svg {
+  width: 12px;
+  height: 12px;
+}
+
+.icon-restore,
+.is-maximized .icon-maximize {
+  display: none;
+}
+
+/* На Mac кнопки окна системные и стоят слева сверху. */
+.is-mac .window-controls {
+  display: none;
+}
+
+.is-mac .page-close {
+  left: 84px;
+}
+
+.is-maximized .icon-restore {
+  display: block;
+}
+
+/* Раскладка */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--queue-w);
+  grid-template-rows: var(--edge) minmax(0, 1fr) var(--edge);
+  grid-template-areas:
+    ". head ."
+    "nav stage queue"
+    "player player player";
+  height: 100%;
+}
+
+.app.is-settling {
+  transition: grid-template-columns 420ms var(--ease);
+}
+
+.is-resizing,
+.is-resizing * {
+  cursor: col-resize !important;
+}
+
+.head {
+  grid-area: head;
+  align-self: end;
+  padding: 0 var(--gap) 16px;
+}
+
+.search-box {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.search-box[hidden] {
+  display: none;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  caret-color: var(--text);
+  user-select: text;
+}
+
+.search:focus-visible {
+  outline: 0;
+}
+
+.search::placeholder {
+  color: var(--muted);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* Навигация */
+
+.nav {
+  --nav-spring: cubic-bezier(0.3, 1.4, 0.4, 1);
+  --nav-y: 0;
+  grid-area: nav;
+  position: relative;
+  container: nav-box / inline-size;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: var(--gap) 8px var(--gap) 44px;
+}
+
+.nav-marker,
+.nav-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transform: translateY(var(--nav-y));
+  transition: transform 520ms var(--nav-spring);
+}
+
+.nav-marker {
+  left: 20px;
+  width: 12px;
+  height: 1px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+}
+
+.nav-glow {
+  right: 12px;
+  height: 44px;
+  margin-top: -22px;
+  border-radius: 0 14px 14px 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 70%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 35%, #000 65%, transparent);
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  padding: 5px 0;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 200ms, transform 320ms var(--nav-spring);
+}
+
+.nav-item:hover {
+  color: var(--text);
+  transform: translateX(3px);
+}
+
+.nav-item.is-active {
+  color: #fff;
+}
+
+.nav-item.is-active .nav-icon {
+  color: var(--accent);
+}
+
+/* Меню сжали: остаются только иконки, подписи растворяются. */
+.nav-item > span:not(.nav-avatar) {
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+@container nav-box (max-width: 128px) {
+  .nav-item > span:not(.nav-avatar) {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+body:not(.intro-active) .nav-item {
+  animation: nav-in 700ms var(--ease) backwards;
+}
+
+body:not(.intro-active) .nav-item:nth-of-type(2) {
+  animation-delay: 80ms;
+}
+
+body:not(.intro-active) .nav-item:nth-of-type(3) {
+  animation-delay: 160ms;
+}
+
+body:not(.intro-active) .nav-item:nth-of-type(4) {
+  animation-delay: 240ms;
+}
+
+body:not(.intro-active) .nav-item:nth-of-type(5) {
+  animation-delay: 320ms;
+}
+
+body:not(.intro-active) .nav-item:nth-of-type(6) {
+  animation-delay: 400ms;
+}
+
+@keyframes nav-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateX(-12px);
+  }
+}
+
+.nav-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  stroke-dasharray: 1;
+  transition: filter 240ms;
+}
+
+.nav-item.is-active .nav-icon {
+  filter: drop-shadow(0 0 5px rgba(var(--accent-rgb), 0.55));
+}
+
+.nav-icon > * {
+  stroke-dasharray: 1;
+}
+
+.nav-item:hover .nav-icon > *,
+.nav-item.is-active .nav-icon > * {
+  animation: nav-draw 620ms var(--ease) backwards;
+}
+
+.nav-icon > :nth-child(2) {
+  animation-delay: 90ms !important;
+}
+
+.nav-icon > :nth-child(3) {
+  animation-delay: 180ms !important;
+}
+
+@keyframes nav-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Аккаунт */
+
+.nav-account {
+  margin-top: auto;
+  gap: 10px;
+  text-align: left;
+}
+
+.nav-avatar {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -5px;
+  border-radius: 50%;
+}
+
+.nav-avatar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0.5) 75%, rgba(255, 255, 255, 0.75));
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0;
+  transition: opacity 240ms;
+}
+
+.nav-avatar.is-connected::before {
+  opacity: 1;
+}
+
+.nav-account:hover .nav-avatar::before,
+.nav-account.is-active .nav-avatar::before {
+  animation: nav-ring 2.6s linear infinite;
+}
+
+@keyframes nav-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nav-initial {
+  display: none;
+  font-size: 12px;
+}
+
+.nav-avatar.is-connected .nav-initial {
+  display: block;
+}
+
+.nav-avatar.is-connected .nav-icon {
+  display: none;
+}
+
+.nav-account-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.nav-account-name,
+.nav-account-note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nav-account-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nav-account-note:empty {
+  display: none;
+}
+
+/* Центр и четыре линии */
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  min-height: 0;
+}
+
+.line {
+  position: absolute;
+  background: var(--line);
+  border-radius: 1px;
+}
+
+.line-top,
+.line-bottom {
+  left: var(--gap);
+  right: var(--gap);
+  height: 1px;
+  mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent);
+  animation: draw-x 1100ms var(--ease) both;
+}
+
+.line-left,
+.line-right {
+  top: var(--gap);
+  bottom: var(--gap);
+  width: 1px;
+  mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+  animation: draw-y 1100ms var(--ease) 120ms both;
+}
+
+.line-top {
+  top: 0;
+}
+
+.line-bottom {
+  bottom: 0;
+}
+
+.line-left {
+  left: 0;
+}
+
+.line-right {
+  right: 0;
+}
+
+/* За линии можно взяться: область шире самой линии, а при наведении появляется ручка. */
+.line-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 15px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle-left {
+  left: -7px;
+}
+
+.handle-right {
+  right: -7px;
+}
+
+.line-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 3px;
+  height: 44px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.6);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0.4);
+  transition: opacity 200ms ease, transform 320ms var(--ease);
+}
+
+.line-handle:hover::after,
+.line-handle.is-dragging::after {
+  opacity: 1;
+  transform: translateY(-50%);
+}
+
+.stage:has(.handle-left:hover, .handle-left.is-dragging) .line-left,
+.stage:has(.handle-right:hover, .handle-right.is-dragging) .line-right {
+  background: rgba(var(--accent-rgb), 0.5);
+}
+
+.on-home .line-handle {
+  pointer-events: auto;
+}
+
+.on-wave .line-handle,
+body.page-open .line-handle {
+  display: none;
+}
+
+.progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+}
+
+@keyframes draw-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes draw-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.scroll {
+  position: absolute;
+  inset: 12px 8px;
+  overflow-y: auto;
+}
+
+.view {
+  display: none;
+  padding: 16px 28px;
+}
+
+.view.is-active {
+  display: block;
+  animation: view-in 320ms var(--ease) both;
+}
+
+.view-center.is-active {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.rows li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.status::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+}
+
+.status.is-on {
+  color: var(--text);
+}
+
+.status.is-on::before {
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.row-end {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.row-action {
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms;
+}
+
+.row-action:hover {
+  color: var(--text);
+}
+
+.seek {
+  position: absolute;
+  right: var(--gap);
+  bottom: -6px;
+  left: var(--gap);
+  z-index: 1;
+  height: 13px;
+  cursor: pointer;
+}
+
+.seek-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.6);
+  transform: translate(-50%, -50%);
+  transition: left 250ms linear, width 160ms ease, height 160ms ease;
+}
+
+.seek:hover .seek-dot {
+  width: 9px;
+  height: 9px;
+}
+
+.link {
+  margin-top: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms;
+}
+
+.link:hover {
+  color: var(--text);
+}
+
+/* Очередь */
+
+.queue {
+  grid-area: queue;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--gap) 20px var(--gap) 28px;
+  overflow: hidden;
+  container: queue-box / inline-size;
+}
+
+.queue > * {
+  transition: opacity 240ms ease;
+}
+
+@container queue-box (max-width: 96px) {
+  .queue > * {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+.queue-title-main {
+  white-space: nowrap;
+}
+
+.queue-list {
+  min-height: 0;
+  margin-top: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-heading {
+  padding: 10px 0 4px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.queue-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0;
+  padding: 3px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 160ms, background-color 160ms, grid-template-columns 320ms var(--ease), column-gap 320ms var(--ease);
+}
+
+.queue-item:hover {
+  color: var(--text);
+}
+
+.queue-cover {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: calc(6px * var(--round));
+  background: var(--hover);
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.queue-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.queue-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.queue-title,
+.queue-artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.queue-artist {
+  display: none;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* Очередь расширили: появляются обложки и артисты. */
+@container queue-box (min-width: 232px) {
+  .queue-item {
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: 11px;
+    padding: 5px 6px 5px 4px;
+  }
+
+  .queue-item:hover {
+    background: var(--hover);
+  }
+
+  .queue-cover {
+    opacity: 1;
+  }
+
+  .queue-artist {
+    display: block;
+  }
+}
+
+.queue-action {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  background: rgba(20, 20, 20, 0.85);
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.queue-action:hover {
+  background: #2a2a2a;
+}
+
+.queue-action:active {
+  transform: translateY(-50%) scale(0.86);
+}
+
+.queue-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.queue-item:hover .queue-action,
+.queue-action:focus-visible {
+  opacity: 1;
+}
+
+/* Короткое подтверждение над плеером */
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--edge) + 16px);
+  left: 50%;
+  z-index: 25;
+  max-width: 60vw;
+  padding: 8px 16px;
+  overflow: hidden;
+  border-radius: 18px;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: rgba(30, 30, 30, 0.9);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 10px);
+  transition: opacity 220ms ease, transform 320ms var(--ease);
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.tip {
+  position: fixed;
+  z-index: 40;
+  max-width: 340px;
+  padding: 5px 10px;
+  overflow: hidden;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: #1c1c1c;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -92%);
+  transition: opacity 140ms ease 0ms, transform 200ms var(--ease) 0ms;
+}
+
+.tip.is-visible {
+  opacity: 1;
+  transform: translate(-50%, -100%);
+  transition-delay: 350ms;
+}
+
+/* Плеер */
+
+/* Кнопки стоят по центру окна, даже если боковые панели разной ширины. */
+.player {
+  grid-area: player;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.track {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  max-width: 420px;
+  padding-left: 44px;
+  line-height: 1.35;
+}
+
+.track.has-cover {
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 12px;
+  padding-left: 20px;
+}
+
+.now-artist {
+  font-size: 12px;
+}
+
+.now-artist:empty {
+  display: none;
+}
+
+.icon-pause,
+.is-playing .icon-start {
+  display: none;
+}
+
+.is-playing .icon-pause {
+  display: block;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text);
+  transition: background-color 160ms, color 160ms;
+}
+
+.icon:hover:enabled {
+  background: var(--hover);
+}
+
+.icon:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-play {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+}
+
+.side {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  padding-right: 28px;
+}
+
+.time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.volume {
+  --value: 70%;
+  width: 84px;
+  height: 16px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.volume::-webkit-slider-runnable-track {
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent) var(--value), var(--line) var(--value));
+}
+
+.volume::-webkit-slider-thumb {
+  appearance: none;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform 160ms;
+}
+
+.volume:hover::-webkit-slider-thumb {
+  transform: scale(1.4);
+}
+
+/* Настройка «Меньше анимаций»: всё сразу приходит в конечное состояние. */
+.is-calm *,
+.is-calm *::before,
+.is-calm *::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  transition-delay: 0s !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}

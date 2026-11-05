@@ -1,0 +1,293 @@
+.app-ambient {
+  position: fixed;
+  top: calc(-35% - 18.75vw);
+  left: calc(-15% - 18.75vw);
+  z-index: 0;
+  width: 112.5vw;
+  height: 112.5vw;
+  opacity: var(--glow);
+  pointer-events: none;
+  animation: ambient 26s ease-in-out infinite alternate;
+}
+
+.app-ambient:not(.has-image) {
+  display: none;
+}
+
+.app {
+  position: relative;
+  z-index: 1;
+}
+
+/* Поверх Главной остаются только меню, плеер и четыре линии */
+
+.head,
+.queue,
+.scroll {
+  transition: opacity 420ms ease;
+}
+
+.on-home .head,
+.on-home .queue,
+.on-home .scroll {
+  opacity: 0;
+}
+
+.on-home .app {
+  pointer-events: none;
+}
+
+.on-home .nav,
+.on-home .player,
+.on-home .seek {
+  pointer-events: auto;
+}
+
+.line {
+  transition: background-color 420ms ease;
+}
+
+.on-home .line {
+  background: rgba(255, 255, 255, 0.34);
+}
+
+/* Главная */
+
+.home {
+  --tile: clamp(150px, 27vh, 300px);
+  --tile-gap: 14px;
+  --light-x: 50%;
+  --light-y: 45%;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+/* Под открытой страницей трека стена не видна: как только страница проявилась, стену можно не держать. */
+body.page-open .home {
+  visibility: hidden;
+  transition: visibility 0s linear 450ms;
+}
+
+.home.is-active {
+  animation: home-in 900ms ease both;
+}
+
+.intro-active .home {
+  visibility: hidden;
+}
+
+@keyframes home-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.home-wall {
+  position: absolute;
+  inset: -16% -12%;
+  display: grid;
+  align-content: center;
+  row-gap: var(--tile-gap);
+  transform: rotate(-6deg) translate(var(--shift-x, 0), var(--shift-y, 0));
+  transition: transform 1100ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.home-row {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+}
+
+.home-tile {
+  flex: none;
+  width: var(--tile);
+  height: var(--tile);
+  margin-right: var(--tile-gap);
+  overflow: hidden;
+  border-radius: calc(14px * var(--round));
+  background: var(--hover);
+  cursor: pointer;
+  transition: transform 420ms cubic-bezier(0.2, 1.2, 0.3, 1);
+}
+
+.home-tile:hover {
+  transform: scale(1.05);
+}
+
+.home-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Свет за курсором */
+
+.home-shade {
+  position: absolute;
+  inset: 0;
+  opacity: var(--shade);
+  pointer-events: none;
+  background:
+    radial-gradient(circle 430px at var(--light-x) var(--light-y), rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.45) 45%, rgba(0, 0, 0, 0.88) 100%),
+    radial-gradient(ellipse 34% 30% at 50% 50%, rgba(0, 0, 0, 0.86), transparent),
+    linear-gradient(90deg, #000, rgba(0, 0, 0, 0.8) 11%, transparent 26%),
+    linear-gradient(0deg, #000, #000 var(--edge), transparent calc(var(--edge) + 150px)),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.75), transparent 110px);
+}
+
+/* Центр */
+
+.home-hero {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(62vw, 760px);
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.home-title {
+  font-size: clamp(30px, 4.4vw, 62px);
+  font-weight: 300;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.home-stats {
+  min-height: 21px;
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 26px;
+  pointer-events: auto;
+}
+
+.home-mix {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  backdrop-filter: blur(14px);
+}
+
+.home-mix svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 420ms cubic-bezier(0.2, 1.3, 0.3, 1);
+}
+
+.home-mix:hover svg {
+  transform: scaleX(-1);
+}
+
+.home-mix.is-mixing {
+  pointer-events: none;
+}
+
+.home-mix.is-mixing svg {
+  animation: mix-flip 520ms ease-in-out infinite alternate;
+}
+
+@keyframes mix-flip {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(-1);
+  }
+}
+
+.home-action {
+  height: 42px;
+  padding: 0 22px;
+  border-radius: 21px;
+  font-size: 13px;
+  font-weight: 450;
+  cursor: pointer;
+  transition: transform 280ms cubic-bezier(0.2, 1.3, 0.3, 1), box-shadow 280ms ease, background-color 200ms ease;
+}
+
+.home-action[hidden] {
+  display: none;
+}
+
+.home-action:hover {
+  transform: translateY(-2px);
+}
+
+.home-action:active {
+  transform: scale(0.96);
+}
+
+.home-action-main {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.home-action-main:hover {
+  box-shadow: 0 0 32px rgba(var(--accent-rgb), 0.35);
+}
+
+.home-action-ghost {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.home-action-ghost:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.home.is-active .home-title,
+.home.is-active .home-stats,
+.home.is-active .home-actions {
+  animation: home-rise 900ms cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+.home.is-active .home-title { animation-delay: 150ms; }
+.home.is-active .home-stats { animation-delay: 260ms; }
+.home.is-active .home-actions { animation-delay: 360ms; }
+
+@keyframes home-rise {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(18px);
+  }
+}
+
+.home-caption {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--edge) + 22px);
+  left: 0;
+  overflow: hidden;
+  padding: 0 200px;
+  font-size: 13px;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 240ms ease, transform 320ms var(--ease);
+}
+
+.home-caption.is-visible {
+  opacity: 1;
+  transform: none;
+}
