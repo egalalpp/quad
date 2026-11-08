@@ -5,8 +5,7 @@
 // Свет не копится: из старого и нового берётся ярчайшее, иначе дроп заливает экран белым.
 //
 // Фон собран из мелочей, а не из сплошных колец. Искры летят от рамки, и каждая светит той частотой,
-// что звучала, когда она родилась. Хэты зажигают звёздочки, малый барабан ставит квадратики как в логотипе,
-// бочка подталкивает искры и дым. В нарастании всё засасывает внутрь, на дропе искры рвутся в стороны
+// что звучала, когда она родилась. Хэты зажигают звёздочки, бочка подталкивает искры и дым. В нарастании всё засасывает внутрь, на дропе искры рвутся в стороны
 // полосами, по экрану проходит одна волна и лучи. Толщина всех линий считается в пикселях: края ровные.
 class WaveFx {
   // Холст и буферы меньше окна, браузер сам растягивает картинку. Мелочь всё равно чёткая,
@@ -26,7 +25,7 @@ class WaveFx {
   static TINT_MS = 900;
   static QUIET_RECTS = 2;
 
-  // Сколько раз зажглись звёздочки и квадратики: по этому числу выбираются новые места.
+  // Сколько раз зажглись звёздочки: по этому числу выбираются новые места.
   static SEEDS = 97;
 
   static VERTEX = `#version 300 es
@@ -248,10 +247,6 @@ class WaveFx {
     uniform float uGlint;
     uniform float uGlintSeed;
     uniform float uGlintCrowd;
-    uniform float uMark;
-    uniform float uMarkSeed;
-    uniform float uMarkGrow;
-    uniform float uMarkCrowd;
     ${WaveFx.COMMON}
 
     // Мелочь рисуется здесь, поверх, мимо эха: иначе прошлые кадры размножали бы её лесенкой.
@@ -271,30 +266,13 @@ class WaveFx {
       return 0.55 * arms + exp(-dot(d, d) * 0.5);
     }
 
-    // Квадратики с открытыми углами, как в логотипе: вспыхивают на малом барабане и чуть раскрываются.
-    float marks(vec2 point) {
-      const float CELL = 0.22;
-      vec2 id = floor(point / CELL);
-      float seed = hash(id.x + uMarkSeed * 173.0, id.y + 7.0);
-      if (seed > uMarkCrowd) return 0.0;
-      float salt = seed * 40993.0;
-      vec2 at = (id + 0.5 + (vec2(hash(salt, 5.0), hash(salt, 6.0)) - 0.5) * 0.4) * CELL;
-      vec2 side = abs(turn(uSpin) * (point - at)) * uUnit;
-      float size = (4.0 + 4.0 * hash(salt, 7.0)) * uMarkGrow;
-      float edge = max(side.x, side.y);
-      float line = 1.0 - smoothstep(0.45, 1.45, abs(edge - size));
-      float open = 1.0 - smoothstep(0.55, 0.8, min(side.x, side.y) / max(edge, 0.001));
-      return line * open;
-    }
-
     vec3 sparkle(vec2 pixel) {
-      if (uGlint + uMark < 0.01) return vec3(0.0);
+      if (uGlint < 0.01) return vec3(0.0);
       vec2 point = (pixel - uCenter) / uUnit;
       float radius = length(point);
       float outside = smoothstep(uFrame * 1.1, uFrame * 1.5, radius);
       if (outside <= 0.0) return vec3(0.0);
       float light = glints(point) * uGlint * exp(-radius * 0.35);
-      light += marks(point) * uMark;
       return tintAt(radius, atan(point.y, point.x)) * light * outside * uAmount;
     }
 
@@ -357,11 +335,7 @@ class WaveFx {
     this.twistSide = 1;
     this.glint = 0;
     this.glintSeed = 0;
-    this.mark = 0;
-    this.markSeed = 0;
-    this.markAge = 1;
     this.seenHats = 0;
-    this.seenSnares = 0;
     this.lastDrop = 0;
     this.step = 16.7;
     this.tintA = [1, 1, 1];
@@ -556,20 +530,11 @@ class WaveFx {
   // Удары узнаются по счёту, а не по кадру: фон рисует не каждый кадр и иначе пропускал бы их.
   followHits(pulse) {
     const { SEEDS } = WaveFx;
-    const { hat, snare } = pulse.hits;
-    if (hat !== this.seenHats) {
-      this.seenHats = hat;
-      this.glintSeed = (this.glintSeed + 1) % SEEDS;
-      this.glint = Math.max(this.glint, 0.35 + 0.65 * pulse.hat);
-    }
-    if (snare !== this.seenSnares) {
-      this.seenSnares = snare;
-      if (pulse.heat > 0.2) {
-        this.markSeed = (this.markSeed + 1) % SEEDS;
-        this.mark = 0.5 + 0.5 * pulse.snare;
-        this.markAge = 0;
-      }
-    }
+    const { hat } = pulse.hits;
+    if (hat === this.seenHats) return;
+    this.seenHats = hat;
+    this.glintSeed = (this.glintSeed + 1) % SEEDS;
+    this.glint = Math.max(this.glint, 0.35 + 0.65 * pulse.hat);
   }
 
   advance(ms, pulse, spin) {
@@ -586,8 +551,6 @@ class WaveFx {
 
     this.followHits(pulse);
     this.glint *= 0.5 ** (ms / 80);
-    this.mark *= 0.5 ** (ms / 180);
-    this.markAge += seconds;
 
     if (drop > this.lastDrop + 0.5) {
       this.flash = 1;
@@ -697,10 +660,6 @@ class WaveFx {
     gl.uniform1f(uniforms.uGlint, this.glint * (0.45 + 0.55 * heat));
     gl.uniform1f(uniforms.uGlintSeed, this.glintSeed);
     gl.uniform1f(uniforms.uGlintCrowd, 0.03 + 0.07 * heat);
-    gl.uniform1f(uniforms.uMark, this.mark * heat);
-    gl.uniform1f(uniforms.uMarkSeed, this.markSeed);
-    gl.uniform1f(uniforms.uMarkGrow, 1 + 0.8 * (1 - 0.5 ** (this.markAge / 0.08)));
-    gl.uniform1f(uniforms.uMarkCrowd, 0.05 + 0.1 * heat);
     gl.bindVertexArray(this.vertices);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }

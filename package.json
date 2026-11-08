@@ -1,6 +1,6 @@
 {
   "name": "quad",
-  "version": "0.2.3",
+  "version": "0.2.3.1",
   "description": "Quad: вся музыка в одном плеере",
   "main": "src/main.js",
   "private": true,
