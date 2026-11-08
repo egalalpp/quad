@@ -42,6 +42,26 @@
   const pageText = document.getElementById('page-text');
   const divider = document.getElementById('page-divider');
   const miniCover = document.getElementById('now-cover');
+  const backdrop = page.querySelector('.page-backdrop');
+
+  // Живой фон расходится от обложки, а под текстом песни и подписями притихает.
+  const QUIET_TEXT = 0.5;
+  const backdropHost = {
+    element: page,
+    mount: (canvas) => backdrop.append(canvas),
+    layout: () => {
+      const box = coverFrame.getBoundingClientRect();
+      const edge = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge'));
+      return {
+        centerX: box.left + box.width / 2,
+        centerY: box.top + box.height / 2,
+        half: box.width / 2,
+        safeBottom: edge,
+        quiet: [lyricsHolder.getBoundingClientRect(), pageText.getBoundingClientRect()],
+        quietLevel: QUIET_TEXT,
+      };
+    },
+  };
   const { audio } = quadPlayer;
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const calm = () => reducedMotion || document.documentElement.classList.contains('is-calm');
@@ -450,6 +470,7 @@
     startCrestLoop();
 
     document.body.classList.add('page-open');
+    quadBackdrop.attach(backdropHost);
     miniCover.classList.add('is-away');
     page.classList.remove('is-closing');
     page.classList.add('is-open');
@@ -484,7 +505,10 @@
 
     miniCover.classList.remove('is-away');
     info.classList.remove('is-flying');
-    if (!isOpen) page.hidden = true;
+    if (!isOpen) {
+      page.hidden = true;
+      quadBackdrop.detach(backdropHost);
+    }
     landing.cancel();
   }
 

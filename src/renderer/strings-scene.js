@@ -355,6 +355,17 @@ class StringsScene {
     }
   }
 
+  // Взрыв из центра: все звёзды разлетаются и возвращаются на свои места.
+  blastDust(force) {
+    for (const particle of this.dust) {
+      const dx = particle.x - this.centerX;
+      const dy = particle.y - this.centerY;
+      const distance = Math.hypot(dx, dy) || 1;
+      particle.velocityX += (dx / distance) * force;
+      particle.velocityY += (dy / distance) * force;
+    }
+  }
+
   /* Вспышка и эхо */
 
   drawFlash() {

@@ -16,6 +16,13 @@
     { from: 3500, to: 14000, ripples: 6, speed: 0.012, gain: 2.2 },
   ];
   const MAX_SWING = 16;
+
+  // На дропе струны рвёт сильнее, а звёзды разлетаются из центра.
+  const DROP_SWING = 1.6;
+  const DROP_PLUCK = 18;
+  const DROP_BLAST = 26;
+
+  const SAFE_LEFT = 90;
   const ATTACK = 0.5;
   const RELEASE = 0.88;
 
@@ -35,7 +42,9 @@
   const why = document.getElementById('wave-why');
   const startButton = document.getElementById('wave-start');
   const navItem = document.querySelector('[data-view="wave"]');
-  const scene = new StringsScene(document.getElementById('wave-canvas'));
+  const sceneCanvas = document.getElementById('wave-canvas');
+  const scene = new StringsScene(sceneCanvas);
+  const { pulse } = quadBackdrop;
   const { audio, analyser } = quadPlayer;
 
   const bins = new Uint8Array(analyser.frequencyBinCount);
@@ -48,6 +57,16 @@
   let bassAverage = 0;
   let kick = 0;
   let shownKey = null;
+  let spot = null;
+
+  // Живой фон под струнами: расходится от рамки, а под меню и плеером стихает.
+  const backdropHost = {
+    element: view,
+    beat: cover,
+    mount: (canvas) => view.insertBefore(canvas, sceneCanvas),
+    layout: () => spot,
+    spin: () => scene.quadAngle(),
+  };
 
   function layout() {
     const edge = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge'));
@@ -63,6 +82,7 @@
     view.style.setProperty('--center-y', `${centerY}px`);
     view.style.setProperty('--half', `${half}px`);
     view.style.setProperty('--cover-size', `${Math.round(half * 0.98)}px`);
+    spot = { centerX, centerY, half, safeBottom: edge, safeLeft: SAFE_LEFT };
   }
 
   // Вдоль струны идёт её полоса спектра: от центра к концам частота растёт.
@@ -74,6 +94,7 @@
     const attack = 1 - ATTACK ** (ms / 16.7);
     const release = 1 - RELEASE ** (ms / 16.7);
     const last = StringsScene.POINTS - 1;
+    const reach = MAX_SWING * (1 + DROP_SWING * pulse.drop);
 
     BANDS.forEach((band, index) => {
       const firstBin = band.from / hzPerBin;
@@ -89,7 +110,7 @@
         level[i] += (target - level[i]) * (target > level[i] ? attack : release);
 
         const ripple = Math.sin(2 * Math.PI * band.ripples * x + phases[index]);
-        swing[i] = Math.min(1, level[i]) * MAX_SWING * Math.sin(Math.PI * x) * ripple;
+        swing[i] = Math.min(1, level[i]) * reach * Math.sin(Math.PI * x) * ripple;
       }
     });
   }
@@ -176,6 +197,7 @@
     if (running) return;
     running = true;
     layout();
+    quadBackdrop.attach(backdropHost);
 
     if (quadWave.isActive()) resume();
     else playEntrance();
@@ -187,9 +209,19 @@
   }
 
   function close() {
-    if (running) scene.release();
+    if (running) {
+      scene.release();
+      quadBackdrop.detach(backdropHost);
+    }
     running = false;
   }
+
+  // Дроп рвёт струны и разбрасывает звёзды, но только на полной силе фона.
+  document.addEventListener('quad:drop', ({ detail: strength }) => {
+    if (!running || strength < 1 || document.body.classList.contains('page-open')) return;
+    scene.pluckAll(DROP_PLUCK);
+    scene.blastDust(DROP_BLAST);
+  });
 
   document.addEventListener('quad:view', ({ detail }) => {
     if (detail === 'wave') open();

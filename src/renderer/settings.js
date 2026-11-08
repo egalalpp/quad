@@ -59,6 +59,15 @@
   filters.at(-1).connect(analyser);
   quadPlayer.analyser = analyser;
 
+  // Удары ловит отдельный анализатор: короткое окно и без сглаживания, иначе они размазываются.
+  const beatAnalyser = context.createAnalyser();
+  beatAnalyser.fftSize = 1024;
+  beatAnalyser.smoothingTimeConstant = 0;
+  beatAnalyser.minDecibels = analyser.minDecibels;
+  beatAnalyser.maxDecibels = analyser.maxDecibels;
+  filters.at(-1).connect(beatAnalyser);
+  quadPlayer.beatAnalyser = beatAnalyser;
+
   audio.addEventListener('play', () => context.resume());
 
   function applyGains() {

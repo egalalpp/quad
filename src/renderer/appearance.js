@@ -14,6 +14,9 @@
     lyricsFont: 'unbounded',
     zoom: 100,
     calm: false,
+    waveFx: 'full',
+    // Каким фон был до выключения кнопкой на волне: туда же он и вернётся.
+    waveFxLast: 'full',
   };
 
   const ACCENTS = [
@@ -29,9 +32,11 @@
   const DENSITIES = { tight: ['Плотно', 3, 34], normal: ['Обычно', 6, 40], roomy: ['Просторно', 10, 48] };
   const FONTS = { unbounded: ['Unbounded', '"Unbounded Variable", "Inter Variable", serif'], inter: ['Inter', '"Inter Variable", sans-serif'] };
   const ZOOMS = [90, 100, 110, 125];
+  const WAVE_FX = { full: ['На всю'], soft: ['Спокойно'], off: ['Выключен'] };
 
   const root = document.documentElement;
   const section = document.getElementById('look');
+  const fxToggle = document.getElementById('wave-fx-toggle');
 
   function stored() {
     try {
@@ -128,6 +133,14 @@
     applyAccent();
   }
 
+  // Два соседних цвета обложки для фона волны. У серой обложки цвета нет.
+  window.quadCoverTints = async (url) => {
+    const color = await readCoverColor(url);
+    if (!color) return null;
+    const [hue, saturation, lightness] = rgbToHsl(color);
+    return [color, hslToRgb((hue + 46) % 360, saturation, lightness)];
+  };
+
   /* Применение */
 
   function apply() {
@@ -142,11 +155,30 @@
     root.style.setProperty('--lyrics-size', String(look.lyricsSize / 100));
     root.style.setProperty('--lyrics-font', FONTS[look.lyricsFont][1]);
     root.classList.toggle('is-calm', look.calm);
+    root.dataset.waveFx = look.calm ? 'off' : look.waveFx;
+    showFxToggle();
     windowControls.setZoom(look.zoom / 100);
   }
 
+  // Кнопка «Фон» на волне выключает только живой фон, остальная анимация остаётся.
+  // При «Меньше анимаций» фон и так выключен, и кнопка объясняет это вместо нажатия.
+  function showFxToggle() {
+    const isOn = look.waveFx !== 'off' && !look.calm;
+    fxToggle.classList.toggle('is-on', isOn);
+    fxToggle.setAttribute('aria-checked', String(isOn));
+    fxToggle.setAttribute('aria-disabled', String(look.calm));
+    if (look.calm) fxToggle.dataset.tip = 'Фон выключен вместе с «Меньше анимаций»';
+    else fxToggle.dataset.tip = isOn ? 'Выключить живой фон' : 'Включить живой фон';
+  }
+
+  fxToggle.addEventListener('click', () => {
+    if (look.calm) return;
+    change({ waveFx: look.waveFx === 'off' ? look.waveFxLast : 'off' });
+  });
+
   function change(values) {
     look = { ...look, ...values };
+    if (look.waveFx !== 'off') look.waveFxLast = look.waveFx;
     localStorage.setItem(KEY, JSON.stringify(look));
     apply();
     render();
@@ -269,6 +301,7 @@
       row('Фон', ...chips(options(BACKGROUNDS), look.background, (background) => change({ background }))),
       row('Свечение обложки', slider('glow', 0, 100, 'Свечение обложки')),
       row('Яркость стены на главной', slider('wall', 0, 100, 'Яркость стены на главной')),
+      row('Живой фон', ...chips(options(WAVE_FX), look.waveFx, (waveFx) => change({ waveFx }))),
       row('Закругления', slider('round', 0, 200, 'Закругления')),
       row('Плотность списков', ...chips(options(DENSITIES), look.density, (density) => change({ density }))),
       row('Размер текста песни', slider('lyricsSize', 70, 140, 'Размер текста песни')),
