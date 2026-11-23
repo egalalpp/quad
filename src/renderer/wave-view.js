@@ -136,8 +136,14 @@
 
   function frame(now) {
     if (!running) return;
-    const ms = Math.min(now - lastFrame, 50);
-    lastFrame = now;
+    const ms = Math.max(0, Math.min(now - lastFrame, 50));
+    lastFrame = Math.max(lastFrame, now);
+
+    // Кадр без длительности: хвосты звёзд делились бы на ноль.
+    if (ms <= 0) {
+      requestAnimationFrame(frame);
+      return;
+    }
 
     // Страница трека закрывает сцену полностью: рисовать незачем, кадры нужны тексту.
     if (document.body.classList.contains('page-open')) {

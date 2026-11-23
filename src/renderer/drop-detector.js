@@ -10,6 +10,9 @@ class DropDetector {
   static RECENT = 1800;
   static PEAK = 45000;
 
+  // Пик не падает до нуля даже в долгой тишине: на него делят, и 0/0 испортил бы все числа.
+  static PEAK_FLOOR = 0.02;
+
   // Первые секунды трека только слушаем: громкое начало не дроп.
   static WARMUP = 3500;
 
@@ -105,7 +108,7 @@ class DropDetector {
       this.fast[name] = follow(this.fast[name], level, ms, FAST);
       this.onset[name] = follow(this.onset[name], level, ms, ONSET);
       this.recent[name] = follow(this.recent[name], level, ms, recentLife);
-      this.peak[name] = Math.max(this.fast[name], this.peak[name] * 0.5 ** (ms / PEAK));
+      this.peak[name] = Math.max(this.fast[name], this.peak[name] * 0.5 ** (ms / PEAK), DropDetector.PEAK_FLOOR);
     }
   }
 
@@ -171,14 +174,30 @@ class DropDetector {
     }
   }
 
+  // Кадр нулевой или отрицательной длины бывает: время кадра браузера может оказаться раньше
+  // прошлой отметки. Деление на него дало бы бесконечность, а за ней NaN, который уже не уходит
+  // и заливает фон белым. Такой кадр пропускается, а испорченное значение сбрасывается.
   update(bins, hzPerBin, ms) {
+    if (!(ms > 0) || !Number.isFinite(ms)) return this;
     this.clock += ms;
     this.trackBands(bins, hzPerBin, ms);
     this.trackHits(bins, ms);
     this.trackHeat(ms);
     this.trackTension(ms);
     this.trackDrop(ms);
+    if (!this.isHealthy()) this.recover();
     return this;
+  }
+
+  isHealthy() {
+    const values = [this.kick, this.snare, this.hat, this.heat, this.tension, this.drop];
+    for (const group of [this.fast, this.onset, this.recent, this.flux, this.peak]) values.push(...Object.values(group));
+    return values.every(Number.isFinite);
+  }
+
+  recover() {
+    this.reset(this.warmup);
+    this.peak = { bass: 0.4, mid: 0.4, high: 0.4 };
   }
 }
 

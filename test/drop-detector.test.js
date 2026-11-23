@@ -122,3 +122,23 @@ test('тишина гасит жар', () => {
   play(detector, 6, {});
   assert.equal(detector.heat < 0.05, true, String(detector.heat));
 });
+
+test('кадр нулевой или отрицательной длины не портит числа и не заливает фон белым', () => {
+  const detector = new DropDetector();
+  play(detector, 4, { bass: 0.3, mid: 0.4, high: 0.4 }, 0.05);
+  for (const ms of [0, -3, Number.NaN]) {
+    detector.update(spectrum({ bass: 0.9, mid: 0.6, high: 0.6 }, 0.05), HZ_PER_BIN, ms);
+  }
+  play(detector, 1, { bass: 0.9, mid: 0.5, high: 0.5 }, 0.05);
+  for (const value of [detector.kick, detector.snare, detector.hat, detector.heat, detector.tension, detector.drop]) {
+    assert.ok(Number.isFinite(value));
+  }
+});
+
+test('после долгой тишины громкость всё ещё считается числом', () => {
+  const detector = new DropDetector();
+  for (let i = 0; i < 2000; i += 1) detector.update(spectrum({}), HZ_PER_BIN, 50);
+  detector.update(spectrum({ bass: 0.5 }), HZ_PER_BIN, FRAME);
+  assert.ok(Number.isFinite(detector.heat));
+  assert.ok(Number.isFinite(detector.tension));
+});

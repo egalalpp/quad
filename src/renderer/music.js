@@ -46,6 +46,7 @@
   const playButton = document.getElementById('btn-play');
   const prevButton = document.getElementById('btn-prev');
   const nextButton = document.getElementById('btn-next');
+  const shareButton = document.getElementById('btn-share');
   const navAvatar = document.getElementById('nav-avatar');
   const navInitial = document.getElementById('nav-initial');
   const navAccountName = document.getElementById('nav-account-name');
@@ -428,9 +429,37 @@
     const hasTrack = currentTrack() !== null;
     playButton.disabled = !hasTrack;
     prevButton.disabled = !hasTrack;
+    shareButton.disabled = !hasTrack;
     nextButton.disabled = upNext.length === 0 && upcomingIndex() >= queue.length;
     playButton.setAttribute('aria-label', audio.paused ? 'Играть' : 'Пауза');
     document.body.classList.toggle('is-playing', !audio.paused);
+  }
+
+  // Ссылка на страницу трека в его сервисе. У старых записей без адреса он собирается по номеру.
+  function trackLink(track) {
+    if (track.page) return track.page;
+    if (track.provider === 'yandex') return `https://music.yandex.ru/track/${track.id}`;
+    return null;
+  }
+
+  async function shareCurrent() {
+    const track = currentTrack();
+    if (!track) return;
+    const link = trackLink(track);
+    if (!link) {
+      showToast('У этого трека нет ссылки');
+      return;
+    }
+    try {
+      await music.copyText(link);
+    } catch {
+      showToast('Не удалось скопировать ссылку');
+      return;
+    }
+    shareButton.classList.remove('is-done');
+    shareButton.getBoundingClientRect();
+    shareButton.classList.add('is-done');
+    showToast(`Ссылка скопирована: ${track.title}`);
   }
 
   // Не кнопка: кнопка не умеет обрезаться многоточием посреди строки.
@@ -658,6 +687,19 @@
     document.dispatchEvent(new CustomEvent('quad:track'));
   }
 
+  // Список, который сейчас играет очередью, переставили на месте: позиция играющего трека
+  // ищется заново, иначе дальше заиграло бы не то. Возвращает то, что вернула сама перестановка.
+  function reorderQueue(list, change) {
+    const anchor = list === queue ? queue[queueIndex] : null;
+    const result = change();
+    if (anchor) {
+      const index = queue.indexOf(anchor);
+      if (index >= 0) queueIndex = index;
+      renderQueue();
+    }
+    return result;
+  }
+
   function playNext() {
     if (upNext.length > 0) {
       detour = upNext.shift();
@@ -705,6 +747,7 @@
   playButton.addEventListener('click', togglePlay);
   prevButton.addEventListener('click', playPrevious);
   nextButton.addEventListener('click', playNext);
+  shareButton.addEventListener('click', shareCurrent);
 
   seekArea.addEventListener('pointerdown', (event) => {
     seekArea.setPointerCapture(event.pointerId);
@@ -755,6 +798,7 @@
     queueIs: (list) => queue === list,
     renderArtistLinks,
     renderQueue,
+    reorderQueue,
     services: () => accounts.filter((account) => account.connected),
     showToast,
     shuffled,

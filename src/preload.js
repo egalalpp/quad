@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('music', {
   removePlaylist: (id) => ipcRenderer.invoke('playlists:remove', id),
   togglePlaylistTrack: (id, track) => ipcRenderer.invoke('playlists:toggle', id, track),
   collection: (id, collectionId, offset) => ipcRenderer.invoke('music:collection', id, collectionId, offset),
+  copyText: (text) => ipcRenderer.invoke('app:copy', text),
+  reorderPlaylist: (id, keys) => ipcRenderer.invoke('playlists:reorder', id, keys),
 });
 
 contextBridge.exposeInMainWorld('quadUpdate', {

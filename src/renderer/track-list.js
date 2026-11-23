@@ -10,7 +10,13 @@ class TrackList {
   // Столько длится появление строк при открытии списка. Дальше строки появляются без анимации.
   static FRESH_MS = 900;
 
-  constructor(root) {
+  // Перетаскивание строк: с какого сдвига мыши оно начинается и как список листается у краёв.
+  static DRAG_START_PX = 6;
+  static SCROLL_EDGE = 70;
+  static SCROLL_SPEED = 18;
+  static ORDER_PREFIX = 'quad.order.';
+
+  constructor(root, { reorderable = false } = {}) {
     root.append(document.getElementById('collection-template').content.cloneNode(true));
 
     this.root = root;
@@ -40,6 +46,17 @@ class TrackList {
     this.windowFrame = 0;
     this.freshTimer = 0;
     this.onRemove = undefined;
+
+    // Свой порядок треков: ключ трека и его место. Пока порядка нет, треки идут как у сервиса.
+    this.reorderable = reorderable;
+    this.order = null;
+    this.ranks = new Map();
+    this.anchor = -1;
+    this.lastIncoming = null;
+    this.drag = null;
+    this.pointerY = 0;
+    this.suppressClick = false;
+    if (reorderable) this.enableDrag();
 
     this.playButton.addEventListener('click', () => quadPlayer.play(this.tracks, 0));
     this.shuffleButton.addEventListener('click', () => {
@@ -80,6 +97,8 @@ class TrackList {
 
   createItem(index) {
     const item = quadPlayer.createRow(this.tracks[index], index, this.tracks, { onRemove: this.onRemove });
+    item.dataset.index = index;
+    if (this.drag && this.tracks[index] === this.drag.track) item.classList.add('is-drag-source');
     this.rendered.set(index, item);
     return item;
   }
@@ -168,6 +187,10 @@ class TrackList {
     this.tracks = [];
     this.nextOffset = 0;
     this.loading = false;
+    this.order = this.loadOrder();
+    this.ranks = new Map();
+    this.anchor = -1;
+    this.lastIncoming = null;
 
     this.title.textContent = collection.title;
     this.subtitle.textContent = collection.subtitle ?? '';
@@ -212,8 +235,9 @@ class TrackList {
       if (request !== this.request) return;
 
       const firstIndex = this.tracks.length;
-      this.tracks.push(...page.tracks);
+      const moved = quadPlayer.reorderQueue(this.tracks, () => this.merge(page.tracks));
       this.nextOffset = page.nextOffset;
+      if (moved) this.resetRendered();
       this.renderWindow();
 
       if (firstIndex === 0 && !collection.cover) this.showMosaic();
@@ -232,5 +256,222 @@ class TrackList {
     } finally {
       if (request === this.request) this.loading = false;
     }
+  }
+
+  /* Свой порядок */
+
+  static keyOf(track) {
+    return `${track.provider}:${track.id}`;
+  }
+
+  orderKey() {
+    const { collection } = this;
+    return `${TrackList.ORDER_PREFIX}${collection.provider}:${collection.collectionId ?? collection.id}`;
+  }
+
+  // Свои плейлисты хранят порядок сами, для остальных он запоминается здесь.
+  loadOrder() {
+    if (!this.reorderable || this.collection.provider === 'quad') return null;
+    try {
+      const keys = JSON.parse(localStorage.getItem(this.orderKey()) ?? 'null');
+      return Array.isArray(keys) ? new Map(keys.map((key, index) => [key, index])) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Новая страница встаёт по сохранённому порядку. Трек, которого в нём нет (свежий лайк или ещё
+  // не загруженный при перестановке), держится рядом со своим соседом по списку сервиса.
+  // Возвращает true, если что-то встало не в конец: тогда строки надо пересобрать.
+  merge(incoming) {
+    if (!this.order) {
+      this.tracks.push(...incoming);
+      this.lastIncoming = incoming.at(-1) ?? this.lastIncoming;
+      return false;
+    }
+
+    let moved = false;
+    for (const track of incoming) {
+      const saved = this.order.get(TrackList.keyOf(track));
+      const rank = saved ?? this.anchor + 0.5;
+      if (saved !== undefined) this.anchor = saved;
+      this.ranks.set(track, rank);
+
+      let at = this.tracks.length;
+      while (at > 0 && (this.ranks.get(this.tracks[at - 1]) ?? -Infinity) > rank) at -= 1;
+      if (at < this.tracks.length) moved = true;
+      this.tracks.splice(at, 0, track);
+      this.lastIncoming = track;
+    }
+    return moved;
+  }
+
+  saveOrder() {
+    const { collection, tracks } = this;
+    const keys = tracks.map(TrackList.keyOf);
+
+    if (collection.provider === 'quad') {
+      music.reorderPlaylist(collection.id, keys)
+        .then(() => document.dispatchEvent(new CustomEvent('quad:library-changed')))
+        .catch(() => quadPlayer.showToast('Не удалось сохранить порядок'));
+      return;
+    }
+
+    this.order = new Map(keys.map((key, index) => [key, index]));
+    this.ranks = new Map(tracks.map((track, index) => [track, index]));
+    this.anchor = this.lastIncoming ? tracks.indexOf(this.lastIncoming) : tracks.length - 1;
+    try {
+      localStorage.setItem(this.orderKey(), JSON.stringify(keys));
+    } catch {
+      quadPlayer.showToast('Не удалось запомнить порядок');
+    }
+  }
+
+  // Строки помнят свой номер, поэтому после перестановки собираются заново. Высота строки та же.
+  resetRendered() {
+    for (const item of this.rendered.values()) item.remove();
+    this.rendered.clear();
+  }
+
+  /* Перетаскивание */
+
+  enableDrag() {
+    this.list.classList.add('is-sortable');
+    this.list.addEventListener('pointerdown', (event) => this.press(event));
+
+    // Обложку браузер сам тащит как картинку, а это перебивает перестановку.
+    this.list.addEventListener('dragstart', (event) => event.preventDefault());
+
+    // Отпущенная после перетаскивания кнопка мыши не должна включать трек.
+    this.list.addEventListener('click', (event) => {
+      if (!this.suppressClick) return;
+      this.suppressClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+  }
+
+  press(event) {
+    if (event.button !== 0 || this.drag || this.tracks.length < 2) return;
+    const row = event.target.closest('.track-row');
+    if (!row || event.target.closest('.row-actions, .artist-link, .album-link')) return;
+    const item = row.parentElement;
+    const index = Number(item.dataset.index);
+    if (!Number.isInteger(index) || !this.tracks[index]) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const move = (moveEvent) => {
+      if (!this.drag) {
+        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < TrackList.DRAG_START_PX) return;
+        this.beginDrag(index, item, row, startY);
+      }
+      this.pointerY = moveEvent.clientY;
+      this.updateDrag();
+    };
+    const stop = (commit) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('blur', cancel);
+      if (this.drag) this.finishDrag(commit);
+    };
+    const release = () => stop(true);
+    const cancel = () => stop(false);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', cancel);
+    window.addEventListener('blur', cancel);
+  }
+
+  beginDrag(index, item, row, startY) {
+    const box = row.getBoundingClientRect();
+
+    const ghost = document.createElement('li');
+    ghost.className = 'track-ghost';
+    ghost.setAttribute('aria-hidden', 'true');
+    const copy = row.cloneNode(true);
+    copy.classList.remove('is-current');
+    copy.removeAttribute('tabindex');
+    copy.removeAttribute('role');
+    copy.removeAttribute('data-key');
+    ghost.append(copy);
+
+    const marker = document.createElement('li');
+    marker.className = 'track-drop-line';
+    marker.setAttribute('aria-hidden', 'true');
+    this.list.append(ghost, marker);
+
+    this.drag = {
+      track: this.tracks[index],
+      to: index,
+      grab: startY - box.top,
+      ghost,
+      marker,
+      scrollFrame: 0,
+    };
+    item.classList.add('is-drag-source');
+    this.list.classList.add('is-reordering');
+    document.body.classList.add('is-reordering');
+    window.getSelection()?.removeAllRanges();
+    this.autoScroll();
+  }
+
+  updateDrag() {
+    const { drag, list, rowHeight, tracks } = this;
+    if (!drag || rowHeight === 0) return;
+    const y = this.pointerY - list.getBoundingClientRect().top;
+    const top = Math.max(0, Math.min(tracks.length * rowHeight - rowHeight, y - drag.grab));
+    drag.to = Math.max(0, Math.min(tracks.length, Math.round((top + rowHeight / 2) / rowHeight)));
+    drag.ghost.style.transform = `translateY(${top}px)`;
+    drag.marker.style.transform = `translateY(${drag.to * rowHeight}px)`;
+  }
+
+  // У краёв списка он сам листается, чтобы трек можно было унести далеко.
+  autoScroll() {
+    const { drag, scroller } = this;
+    if (!drag) return;
+    const { SCROLL_EDGE, SCROLL_SPEED } = TrackList;
+    const box = scroller.getBoundingClientRect();
+    const fromTop = this.pointerY - box.top;
+    const fromBottom = box.bottom - this.pointerY;
+    let speed = 0;
+    if (fromTop < SCROLL_EDGE) speed = -SCROLL_SPEED * (1 - Math.max(0, fromTop) / SCROLL_EDGE);
+    else if (fromBottom < SCROLL_EDGE) speed = SCROLL_SPEED * (1 - Math.max(0, fromBottom) / SCROLL_EDGE);
+    if (speed !== 0) {
+      scroller.scrollTop += speed;
+      this.updateDrag();
+    }
+    drag.scrollFrame = requestAnimationFrame(() => this.autoScroll());
+  }
+
+  finishDrag(commit) {
+    const { track, to, ghost, marker, scrollFrame } = this.drag;
+    cancelAnimationFrame(scrollFrame);
+    ghost.remove();
+    marker.remove();
+    this.list.querySelectorAll('.is-drag-source').forEach((item) => item.classList.remove('is-drag-source'));
+    this.list.classList.remove('is-reordering');
+    document.body.classList.remove('is-reordering');
+    this.drag = null;
+
+    // Клик приходит сразу после отпускания кнопки, в той же очереди событий.
+    this.suppressClick = true;
+    setTimeout(() => {
+      this.suppressClick = false;
+    }, 0);
+
+    if (!commit) return;
+    const from = this.tracks.indexOf(track);
+    const target = to > from ? to - 1 : to;
+    if (from < 0 || target === from) return;
+
+    quadPlayer.reorderQueue(this.tracks, () => {
+      this.tracks.splice(from, 1);
+      this.tracks.splice(target, 0, track);
+    });
+    this.resetRendered();
+    this.renderWindow();
+    this.saveOrder();
   }
 }

@@ -41,6 +41,7 @@
   const modeButtons = document.querySelectorAll('[data-wave-mode]');
   const dislikeButton = document.getElementById('btn-dislike');
   const seedButtons = document.querySelectorAll('[data-wave-seed]');
+  const playerWaveButton = document.getElementById('btn-wave');
   const tuneToggle = document.getElementById('wave-tune-toggle');
   const tunePanel = document.getElementById('wave-tune');
   const genreBox = document.getElementById('wave-genres');
@@ -298,6 +299,12 @@
     });
   });
 
+  // Та же волна по играющему треку, но прямо из нижней панели.
+  playerWaveButton.addEventListener('click', () => {
+    const track = quadPlayer.currentTrack();
+    if (track) startFrom(track);
+  });
+
   /* События */
 
   document.addEventListener('quad:listen', ({ detail }) => {
@@ -327,6 +334,7 @@
     if (isActive() && queue.length - quadPlayer.queueIndex() <= REFILL_AT) refill();
     document.body.classList.toggle('wave-on', isActive());
     dislikeButton.disabled = current === null;
+    playerWaveButton.disabled = current === null;
     seedButtons.forEach((button) => {
       button.hidden = current === null;
     });

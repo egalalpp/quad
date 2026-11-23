@@ -6,7 +6,7 @@
 //
 // Фон собран из мелочей, а не из сплошных колец. Искры летят от рамки, и каждая светит той частотой,
 // что звучала, когда она родилась. Хэты зажигают звёздочки, бочка подталкивает искры и дым. В нарастании всё засасывает внутрь, на дропе искры рвутся в стороны
-// полосами, по экрану проходит одна волна и лучи. Толщина всех линий считается в пикселях: края ровные.
+// полосами и бьют лучи. Толщина всех линий считается в пикселях: края ровные.
 class WaveFx {
   // Холст и буферы меньше окна, браузер сам растягивает картинку. Мелочь всё равно чёткая,
   // а памяти и работы видеокарте в два с лишним раза меньше.
@@ -20,8 +20,6 @@ class WaveFx {
   static HIGH_HZ = 14000;
   static SPECTRUM_FLOOR = 0.28;
 
-  static RINGS = 4;
-  static RING_FADE = 700;
   static TINT_MS = 900;
   static QUIET_RECTS = 2;
 
@@ -103,7 +101,6 @@ class WaveFx {
     uniform float uSweep;
     uniform float uCrowd;
     uniform float uRays;
-    uniform vec4 uRings[${WaveFx.RINGS}];
     ${WaveFx.COMMON}
 
     float noise(vec2 point) {
@@ -180,22 +177,6 @@ class WaveFx {
       return exp(-max(radius - uFrame, 0.0) * 2.4) * smoke * smoke;
     }
 
-    // Волна дропа: круг и квадрат с открытыми углами. За фронтом остаётся мягкий след.
-    float shocks(vec2 point, float radius) {
-      float sum = 0.0;
-      for (int i = 0; i < ${WaveFx.RINGS}; i += 1) {
-        vec4 ring = uRings[i];
-        if (ring.y < 0.004) continue;
-        vec2 side = abs(turn(ring.w) * point);
-        float high = max(side.x, side.y);
-        float gap = mix(radius, high, ring.z) - ring.x;
-        float open = mix(1.0, 1.0 - smoothstep(0.58, 0.84, min(side.x, side.y) / max(high, 0.001)), ring.z);
-        float wake = gap < 0.0 ? 0.12 * exp(gap * 9.0) : 0.0;
-        sum += ring.y * open * (stroke(gap, 1.1 + 1.6 * ring.y) + wake);
-      }
-      return sum;
-    }
-
     void main() {
       vec2 point = (vUv * uSize - uCenter) / uUnit;
       float radius = length(point);
@@ -222,7 +203,6 @@ class WaveFx {
       float light = sparks(radius, angle, pitch * 0.82 + 0.015) * lift * outside;
       light += rays(radius, angle) * uRays * outside;
       light += haze(point, radius) * (0.04 + 0.1 * uHeat + 0.2 * uKick * uHeat + 0.15 * uDrop) * outside;
-      light += shocks(point, radius) * 0.8;
       light += uFlash * 0.45 * exp(-radius * 5.0);
       light = min(light, 1.3);
 
@@ -323,10 +303,7 @@ class WaveFx {
     this.rows = new Uint8Array(WaveFx.BINS);
     this.head = 0;
     this.ranges = null;
-    this.rings = new Float32Array(WaveFx.RINGS * 4);
-    this.ringSpeed = new Float32Array(WaveFx.RINGS);
     this.quiet = new Float32Array(WaveFx.QUIET_RECTS * 4);
-    this.nextRing = 0;
     this.time = 0;
     this.travel = 0;
     this.sweep = 0;
@@ -489,15 +466,12 @@ class WaveFx {
   }
 
   setTints(first, second) {
-    this.tintGoalA = first.map((value) => value / 255);
-    this.tintGoalB = second.map((value) => value / 255);
-  }
-
-  spawnRing(strength, shape, angle, speed) {
-    const at = this.nextRing * 4;
-    this.rings.set([0, strength, shape, angle], at);
-    this.ringSpeed[this.nextRing] = speed;
-    this.nextRing = (this.nextRing + 1) % WaveFx.RINGS;
+    const tint = (color) => [0, 1, 2].map((index) => {
+      const value = Number(color?.[index]);
+      return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 255)) : 1;
+    });
+    this.tintGoalA = tint(first);
+    this.tintGoalB = tint(second);
   }
 
   // Полосы идут по логарифму: так их делит слух, иначе весь бас уместился бы в паре столбцов.
@@ -538,7 +512,7 @@ class WaveFx {
   }
 
   advance(ms, pulse, spin) {
-    const { RING_FADE, RINGS, TINT_MS } = WaveFx;
+    const { TINT_MS } = WaveFx;
     const { heat, kick, drop, tension } = pulse;
     const seconds = ms / 1000;
     this.time += seconds;
@@ -555,19 +529,12 @@ class WaveFx {
     if (drop > this.lastDrop + 0.5) {
       this.flash = 1;
       this.twistSide = -this.twistSide;
-      this.spawnRing(1.2, 0, 0, 1.9);
-      this.spawnRing(1, 1, -spin, 1.35);
     }
     this.lastDrop = drop;
 
     this.flash *= 0.5 ** (ms / 150);
     const twist = this.twistSide * (0.0012 + 0.004 * heat + 0.012 * drop) - 0.008 * tension;
     this.twist += (twist - this.twist) * (1 - 0.5 ** (ms / 180));
-
-    for (let i = 0; i < RINGS; i += 1) {
-      this.rings[i * 4] += this.ringSpeed[i] * seconds;
-      this.rings[i * 4 + 1] *= 0.5 ** (ms / RING_FADE);
-    }
 
     const blend = 1 - 0.5 ** (ms / TINT_MS);
     for (let i = 0; i < 3; i += 1) {
@@ -624,7 +591,6 @@ class WaveFx {
     gl.uniform1f(uniforms.uSweep, this.sweep);
     gl.uniform1f(uniforms.uCrowd, Math.min(1, 0.3 + 0.4 * heat + 0.3 * drop));
     gl.uniform1f(uniforms.uRays, 0.45 * Math.max(0.25 * heat * heat, drop) * (1 - tension));
-    gl.uniform4fv(uniforms.uRings, this.rings);
 
     gl.bindVertexArray(this.vertices);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -664,11 +630,38 @@ class WaveFx {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  // Одно нечисловое значение в шейдере даёт белый экран, поэтому на видеокарту идут только числа.
+  static safePulse(pulse) {
+    const number = (value) => (Number.isFinite(value) ? value : 0);
+    return {
+      heat: number(pulse.heat),
+      kick: number(pulse.kick),
+      drop: number(pulse.drop),
+      tension: number(pulse.tension),
+      hat: number(pulse.hat),
+      hits: pulse.hits,
+    };
+  }
+
+  heal() {
+    for (const name of ['time', 'travel', 'sweep', 'flash', 'twist', 'glint']) {
+      if (!Number.isFinite(this[name])) this[name] = 0;
+    }
+    for (let i = 0; i < 3; i += 1) {
+      if (!Number.isFinite(this.tintA[i])) this.tintA[i] = this.tintGoalA[i];
+      if (!Number.isFinite(this.tintB[i])) this.tintB[i] = this.tintGoalB[i];
+    }
+  }
+
   // amount: 1 на полную, меньше для спокойного режима.
-  render(ms, pulse, bins, hzPerBin, spin, amount) {
+  render(ms, rawPulse, bins, hzPerBin, rawSpin, amount) {
     if (!this.isReady || this.buffers.length === 0 || !this.spot) return;
+    if (!(ms > 0) || !Number.isFinite(amount)) return;
+    const pulse = WaveFx.safePulse(rawPulse);
+    const spin = Number.isFinite(rawSpin) ? rawSpin : 0;
     this.writeSpectrum(bins, hzPerBin);
     this.advance(ms, pulse, spin);
+    this.heal();
     this.drawScene(ms, pulse, spin, amount);
     this.drawResult(pulse, spin, amount);
     this.buffers.reverse();

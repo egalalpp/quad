@@ -10,7 +10,7 @@
   const message = document.getElementById('library-message');
   const page = document.getElementById('library-page');
   const navItem = document.querySelector('[data-view="library"]');
-  const trackList = new TrackList(page);
+  const trackList = new TrackList(page, { reorderable: true });
   const sources = new SourceSwitch(document.getElementById('library-sources'), {
     storageKey: 'quad.librarySource',
     onChange: showSource,

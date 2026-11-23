@@ -35,10 +35,13 @@
         document.dispatchEvent(new CustomEvent('quad:liked', { detail: track }));
       }
       document.dispatchEvent(new CustomEvent('quad:library-changed'));
-    } catch {
+    } catch (error) {
       if (next) liked.delete(key);
       else liked.add(key);
       render();
+      // Причина видна сразу: иначе сердечко просто молча гаснет.
+      const reason = String(error?.message ?? '').replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      quadPlayer.showToast(reason || 'Не удалось поставить лайк');
     }
   }
 

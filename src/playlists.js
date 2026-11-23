@@ -39,6 +39,21 @@ async function toggleTrack(playlistId, track) {
   await save(playlists);
 }
 
+// Новый порядок приходит списком ключей «сервис:номер». Чего в списке нет, остаётся в конце.
+async function reorder(playlistId, keys) {
+  const playlists = await load();
+  const playlist = playlists.find((item) => item.id === playlistId);
+  if (!playlist || !Array.isArray(keys)) return;
+
+  const place = new Map(keys.map((key, index) => [String(key), index]));
+  const rank = (track) => place.get(`${track.provider}:${track.id}`) ?? Infinity;
+  playlist.tracks = playlist.tracks
+    .map((track, index) => ({ track, index }))
+    .sort((a, b) => (rank(a.track) - rank(b.track)) || (a.index - b.index))
+    .map(({ track }) => track);
+  await save(playlists);
+}
+
 async function library() {
   return (await load()).map((playlist) => ({
     provider: id,
@@ -55,4 +70,4 @@ async function collection(playlistId) {
   return { tracks: playlist?.tracks ?? [], nextOffset: null };
 }
 
-module.exports = { id, load, create, remove, toggleTrack, library, collection };
+module.exports = { id, load, create, remove, toggleTrack, reorder, library, collection };

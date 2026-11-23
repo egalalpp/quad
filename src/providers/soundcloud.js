@@ -183,10 +183,61 @@ async function likedIds() {
   return (await likedTracks()).map((track) => track.id);
 }
 
+// Запись идёт через сессию окна входа: в ней те же куки, что и у сайта, а запрос приходит
+// с адреса сайта, как и его собственный. Если сессия недоступна, запрос уходит напрямую.
+// Отказ на запись не значит, что вход устарел, поэтому токен здесь, в отличие от чтения, не стирается.
+async function writeRequest(target, method) {
+  const saved = await credentials();
+  if (!saved) throw new Error('SoundCloud не подключён');
+
+  const url = new URL(target, API_URL);
+  url.searchParams.set('client_id', saved.clientId);
+  const options = {
+    method,
+    headers: {
+      Authorization: `OAuth ${saved.token}`,
+      Accept: 'application/json',
+      Origin: 'https://soundcloud.com',
+      Referer: 'https://soundcloud.com/',
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+  };
+
+  let response;
+  try {
+    response = await session.fromPartition(LOGIN_PARTITION).fetch(url.href, options);
+  } catch {
+    response = await fetch(url, options);
+  }
+  if (response.status === 429) {
+    await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAYS[1]));
+    response = await fetch(url, options);
+  }
+  return response.status;
+}
+
+const isOk = (status) => status >= 200 && status < 300;
+
 async function setLiked(trackId, liked) {
   const user = await me();
-  await request(`/users/${user.id}/track_likes/${encodeURIComponent(trackId)}`, { method: liked ? 'PUT' : 'DELETE' });
-  likes = null;
+  const method = liked ? 'PUT' : 'DELETE';
+  const status = await writeRequest(`/users/${user.id}/track_likes/${encodeURIComponent(trackId)}`, method);
+
+  // Убрать лайк, которого уже нет, тоже успех.
+  if (!isOk(status) && !(method === 'DELETE' && status === 404)) {
+    throw new Error(`SoundCloud не принял лайк (ответ ${status})`);
+  }
+
+  // Список лайков правится на месте: сервер отдаёт свежий лайк в общем списке не сразу,
+  // а перекачивать тысячи лайков ради одного незачем.
+  if (!likes) return;
+  if (!liked) {
+    likes = likes.filter((track) => track.id !== String(trackId));
+  } else if (!likes.some((track) => track.id === String(trackId))) {
+    const track = await getJson(`/tracks/${encodeURIComponent(trackId)}`).catch(() => null);
+    likes = track ? [...toTracks([track]), ...likes] : null;
+  }
+  if (openCollection.id === 'liked') openCollection = { id: null, tracks: [] };
 }
 
 async function randomTracks(count, skip = new Set()) {

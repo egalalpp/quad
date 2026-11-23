@@ -882,3 +882,67 @@ body:has(.search:focus) .line-top {
     display: none;
   }
 }
+
+/* Перетаскивание треков в медиатеке */
+
+.tracks.is-sortable {
+  position: relative;
+}
+
+.track-ghost,
+.track-drop-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.track-ghost {
+  z-index: 5;
+  will-change: transform;
+}
+
+.track-ghost .track-row {
+  background: rgba(255, 255, 255, 0.11);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+  animation: none;
+  transform: scale(1.015);
+}
+
+.track-ghost .row-actions .track-action:not(.is-liked) {
+  opacity: 0;
+}
+
+.track-drop-line {
+  z-index: 4;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+  transition: transform 90ms ease-out;
+}
+
+.tracks .is-drag-source .track-row {
+  opacity: 0.28;
+}
+
+.tracks.is-reordering .track-row:hover {
+  background: transparent;
+  transform: none;
+}
+
+.tracks.is-reordering .track-row:hover .row-actions .track-action:not(.is-liked) {
+  opacity: 0;
+}
+
+body.is-reordering,
+body.is-reordering * {
+  cursor: grabbing !important;
+  user-select: none;
+}

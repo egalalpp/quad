@@ -39,8 +39,9 @@
 
   function frame(now) {
     if (!running) return;
-    const ms = Math.min(now - lastFrame, MAX_STEP);
-    lastFrame = now;
+    // Время кадра браузера бывает раньше прошлой отметки: отрицательный шаг ломал бы расчёты.
+    const ms = Math.max(0, Math.min(now - lastFrame, MAX_STEP));
+    lastFrame = Math.max(lastFrame, now);
     const current = host();
 
     if (audio.paused) bins.fill(0);

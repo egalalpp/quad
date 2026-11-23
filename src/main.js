@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, protocol, session } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, ipcMain, protocol, session } = require('electron');
 const path = require('node:path');
 const downloads = require('./downloads');
 const lyrics = require('./lyrics');
@@ -228,6 +228,12 @@ ipcMain.handle('playlists:list', () => playlists.load());
 ipcMain.handle('playlists:create', (_event, title) => playlists.create(title));
 ipcMain.handle('playlists:remove', (_event, id) => playlists.remove(id));
 ipcMain.handle('playlists:toggle', (_event, id, track) => playlists.toggleTrack(id, track));
+ipcMain.handle('playlists:reorder', (_event, id, keys) => playlists.reorder(id, keys));
+
+ipcMain.handle('app:copy', (_event, text) => {
+  if (typeof text !== 'string' || text.length > 2000) throw new Error('Нечего копировать');
+  clipboard.writeText(text);
+});
 
 ipcMain.handle('music:artist', (_event, id, artistId) => providerById(id).artist(artistId));
 
